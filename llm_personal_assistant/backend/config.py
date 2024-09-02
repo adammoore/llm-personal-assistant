@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     These settings are loaded from environment variables or .env file.
     """
+    # Environment
+    ENVIRONMENT: str = "development"
+
     # Database settings
     DATABASE_URL: str = "sqlite:///./test.db"
 
@@ -39,6 +42,7 @@ settings = Settings()
 
 # Debug: Print loaded settings
 print(f"Loaded settings:")
+print(f"ENVIRONMENT: {settings.ENVIRONMENT}")
 print(f"DATABASE_URL: {settings.DATABASE_URL}")
 print(f"ANTHROPIC_API_KEY: {'*' * len(settings.ANTHROPIC_API_KEY)}")  # Don't print the actual key
 print(f"SECRET_KEY: {'*' * len(settings.SECRET_KEY)}")  # Don't print the actual key

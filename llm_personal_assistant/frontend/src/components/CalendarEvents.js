@@ -12,12 +12,14 @@ const CalendarEvents = () => {
 
   const fetchEvents = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/calendar/events');
+      const response = await axios.get('http://localhost:8000/calendar/events', { withCredentials: true });
       setEvents(response.data.events);
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
-      if (error.response && error.response.status === 302) {
+      if (error.response && error.response.status === 307) {
+        window.location.href = error.response.headers.location;
+      } else {
         setIsAuthenticated(false);
       }
     }

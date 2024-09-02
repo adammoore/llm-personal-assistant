@@ -76,6 +76,8 @@ async def get_calendar_events(days: int = 7):
     try:
         events = await get_upcoming_events(days)
         return {"events": events}
+    except FileNotFoundError:
+        return {"events": [], "message": "Google Calendar integration not set up. Please add client_secret.json to the backend directory."}
     except HTTPException as e:
         if e.status_code == 302:
             return RedirectResponse(e.headers["Location"])
