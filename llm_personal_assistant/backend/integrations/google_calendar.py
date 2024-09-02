@@ -1,3 +1,9 @@
+"""
+Google Calendar integration module for the LLM-powered personal assistant.
+
+This module handles the authentication and interaction with the Google Calendar API.
+"""
+
 import os
 from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
@@ -6,15 +12,25 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from fastapi import HTTPException
 
+# Import for environment check
+from config import settings
+
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 CLIENT_SECRETS_FILE = "client_secret.json"
 TOKEN_FILE = "token.json"
 
+# Allow OAuth2 insecure transport for local development
+if settings.ENVIRONMENT == "development":
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 def get_calendar_service():
+    if not os.path.exists(CLIENT_SECRETS_FILE):
+        raise FileNotFoundError(f"'{CLIENT_SECRETS_FILE}' not found. Please download it from Google Cloud Console.")
+
     creds = None
     if os.path.exists(TOKEN_FILE):
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -23,7 +39,7 @@ def get_calendar_service():
             flow.redirect_uri = "http://localhost:8000/oauth2callback"
             authorization_url, _ = flow.authorization_url(prompt='consent')
             raise HTTPException(status_code=302, headers={"Location": authorization_url})
-        
+
         with open(TOKEN_FILE, 'w') as token:
             token.write(creds.to_json())
 
@@ -34,13 +50,16 @@ async def get_upcoming_events(days=7):
         service = get_calendar_service()
         now = datetime.utcnow().isoformat() + 'Z'
         time_max = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
-        
+
         events_result = service.events().list(calendarId='primary', timeMin=now,
                                               timeMax=time_max, singleEvents=True,
                                               orderBy='startTime').execute()
         events = events_result.get('items', [])
 
         return events
+    except FileNotFoundError as e:
+        print(f"Error: {str(e)}")
+        return []
     except HTTPException as e:
         raise e
     except Exception as e:

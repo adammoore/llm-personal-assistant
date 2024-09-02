@@ -1,6 +1,6 @@
 # LLM Personal Assistant
 
-This project is a personal assistant powered by Large Language Model (LLM) technology, designed to help individuals with ADHD manage their tasks and schedules more effectively.
+An AI-powered personal assistant designed to help individuals with ADHD manage their tasks and schedules more effectively.
 
 ## Features
 
@@ -51,16 +51,39 @@ This project is a personal assistant powered by Large Language Model (LLM) techn
 
 ## Running the Application
 
-To start both the backend and frontend, use the provided script:
+1. Start the backend:
+   ```
+   cd backend
+   uvicorn main:app --reload
+   ```
 
-```
-./start_app.sh
-```
+2. Start the frontend:
+   ```
+   cd frontend
+   npm start
+   ```
+
+3. Open your browser and navigate to `http://localhost:3000`
 
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
+## Authors
+
+- **Adam Vials Moore** - *Initial work* - [adammoore](https://github.com/adammoore)
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Anthropic for providing the Claude AI model
+- Google Calendar API for schedule integration
+
+## Contact
+
+Adam Vials Moore - moore.adam@gmail.com
+
+Project Link: [https://github.com/adammoore/llm-personal-assistant](https://github.com/adammoore/llm-personal-assistant)

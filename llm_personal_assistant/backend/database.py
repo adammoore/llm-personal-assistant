@@ -7,12 +7,13 @@ and provides a base class for database models.
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.pool import NullPool
+from datetime import datetime
 
 from config import settings
 
 # Create async engine
-# Note the change in the DATABASE_URL prefix
 engine = create_async_engine(settings.DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"), poolclass=NullPool)
 
 # Create async session
@@ -21,6 +22,17 @@ AsyncSessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String)
+    due_date = Column(DateTime, nullable=True)
+    completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 async def init_db():
     """Initialize the database by creating all tables."""
