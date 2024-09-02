@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextField, Button } from '@material-ui/core';
+import { TextField, Button, Box, Tooltip } from '@mui/material';
 import axios from 'axios';
 
 const TaskForm = ({ onTaskAdded }) => {
@@ -20,25 +20,32 @@ const TaskForm = ({ onTaskAdded }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <TextField
-        label="Title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        fullWidth
-        margin="normal"
-      />
-      <TextField
-        label="Description"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        fullWidth
-        margin="normal"
-        multiline
-        rows={4}
-      />
-      <Button type="submit" variant="contained" color="primary">
-        Add Task
-      </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Tooltip title="Enter the title of your task">
+          <TextField
+            label="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            fullWidth
+            required
+          />
+        </Tooltip>
+        <Tooltip title="Provide a detailed description of your task">
+          <TextField
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            fullWidth
+            multiline
+            rows={4}
+          />
+        </Tooltip>
+        <Tooltip title="Click to add the task">
+          <Button type="submit" variant="contained" color="primary">
+            Add Task
+          </Button>
+        </Tooltip>
+      </Box>
     </form>
   );
 };

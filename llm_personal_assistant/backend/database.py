@@ -12,7 +12,8 @@ from sqlalchemy.pool import NullPool
 from config import settings
 
 # Create async engine
-engine = create_async_engine(settings.DATABASE_URL, poolclass=NullPool)
+# Note the change in the DATABASE_URL prefix
+engine = create_async_engine(settings.DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"), poolclass=NullPool)
 
 # Create async session
 AsyncSessionLocal = sessionmaker(

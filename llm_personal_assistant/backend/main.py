@@ -6,14 +6,15 @@ It also initializes the database connection and other necessary components.
 """
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database import init_db, get_db
 from modules import task_manager
-from integrations import google_calendar
+from integrations.google_calendar import get_upcoming_events, handle_oauth2_callback
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -37,6 +38,7 @@ async def startup_event():
 async def root():
     """Root endpoint for testing purposes."""
     return {"message": "Welcome to the LLM Personal Assistant"}
+
 class TaskCreate(BaseModel):
     title: str
     description: str
@@ -72,8 +74,21 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
 async def get_calendar_events(days: int = 7):
     """Retrieve upcoming events from Google Calendar."""
     try:
-        events = await google_calendar.get_upcoming_events(days)
+        events = await get_upcoming_events(days)
         return {"events": events}
+    except HTTPException as e:
+        if e.status_code == 302:
+            return RedirectResponse(e.headers["Location"])
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/oauth2callback")
+async def oauth2_callback(request: Request):
+    """Handle the OAuth2 callback from Google."""
+    try:
+        result = await handle_oauth2_callback(request)
+        return RedirectResponse(url="http://localhost:3000")  # Redirect to frontend after successful authentication
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

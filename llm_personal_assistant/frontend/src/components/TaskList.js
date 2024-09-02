@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { List, ListItem, ListItemText, ListItemSecondaryAction, IconButton, Typography } from '@material-ui/core';
-import { Delete, Edit } from '@material-ui/icons';
+import { List, ListItem, ListItemText, ListItemSecondaryAction, IconButton, Typography, Tooltip } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import axios from 'axios';
 
 const TaskList = () => {
@@ -30,7 +31,7 @@ const TaskList = () => {
 
   return (
     <div>
-      <Typography variant="h4" component="h2">
+      <Typography variant="h6" component="h2" gutterBottom>
         Tasks
       </Typography>
       <List>
@@ -41,12 +42,16 @@ const TaskList = () => {
               secondary={task.description}
             />
             <ListItemSecondaryAction>
-              <IconButton edge="end" aria-label="edit">
-                <Edit />
-              </IconButton>
-              <IconButton edge="end" aria-label="delete" onClick={() => deleteTask(task.id)}>
-                <Delete />
-              </IconButton>
+              <Tooltip title="Edit task">
+                <IconButton edge="end" aria-label="edit">
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete task">
+                <IconButton edge="end" aria-label="delete" onClick={() => deleteTask(task.id)}>
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
             </ListItemSecondaryAction>
           </ListItem>
         ))}
