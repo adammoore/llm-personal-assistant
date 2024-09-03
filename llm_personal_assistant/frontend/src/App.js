@@ -11,6 +11,7 @@ import Paper from '@mui/material/Paper';
 import TaskList from './components/TaskList';
 import TaskForm from './components/TaskForm';
 import CalendarEvents from './components/CalendarEvents';
+import PromptSystem from './components/PromptSystem';
 
 const darkTheme = createTheme({
   palette: {
@@ -34,6 +35,7 @@ function App() {
           <Grid container spacing={3}>
             <Grid item xs={12} md={8}>
               <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+                <PromptSystem />
                 <TaskForm />
                 <TaskList />
               </Paper>
