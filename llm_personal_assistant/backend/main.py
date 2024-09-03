@@ -10,11 +10,14 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from config import settings
 from database import init_db, get_db, engine
 from modules import task_manager, prompt_system, llm_integration
-from integrations.google_calendar import get_upcoming_events, handle_oauth2_callback, get_calendar_service
+from integrations.google_calendar import (
+    get_upcoming_events,
+    handle_oauth2_callback,
+    get_calendar_service,
+)
 from scheduler import start_scheduler
 from pydantic import BaseModel
 from datetime import datetime
@@ -30,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and other startup tasks."""
@@ -38,68 +42,35 @@ async def startup_event():
         await prompt_system.initialize_prompts(session)
     start_scheduler()
 
+
 @app.get("/")
 async def root():
     """Root endpoint for testing purposes."""
     return {"message": "Welcome to the LLM Personal Assistant"}
 
-class TaskCreate(BaseModel):
-    title: str
-    description: str
-    due_date: datetime = None
-
-@app.post("/tasks/")
-async def create_task(task: TaskCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new task."""
-    return await task_manager.create_task(db, task.title, task.description, task.due_date)
-
-@app.get("/tasks/")
-async def read_tasks(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """Retrieve a list of tasks."""
-    return await task_manager.get_tasks(db, skip=skip, limit=limit)
-
-@app.put("/tasks/{task_id}")
-async def update_task(task_id: int, task: TaskCreate, db: AsyncSession = Depends(get_db)):
-    """Update an existing task."""
-    updated_task = await task_manager.update_task(db, task_id, **task.dict())
-    if updated_task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return updated_task
-
-@app.delete("/tasks/{task_id}")
-async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a task."""
-    success = await task_manager.delete_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"message": "Task deleted successfully"}
-
-@app.get("/prompts/{timeperiod}")
-async def get_prompts(timeperiod: prompt_system.TimeperiodEnum, db: AsyncSession = Depends(get_db)):
-    """Retrieve prompts for a specific time period."""
-    prompts = await prompt_system.get_prompts_for_timeperiod(db, timeperiod)
-    return prompts
-
-class PromptResponse(BaseModel):
-    prompt_id: int
-    response: str
-
-@app.post("/prompts/respond")
-async def respond_to_prompt(prompt_response: PromptResponse, db: AsyncSession = Depends(get_db)):
-    """Save a user's response to a prompt and process it with LLM."""
-    response = await prompt_system.save_prompt_response(db, prompt_response.prompt_id, prompt_response.response)
-    prompt = await prompt_system.get_prompt_by_id(db, prompt_response.prompt_id)
-    analysis = await llm_integration.process_prompt_response(db, prompt, prompt_response.response)
-    return {"response": response, "analysis": analysis}
 
 @app.get("/calendar/events")
 async def get_calendar_events(days: int = 7):
-    """Retrieve upcoming events from Google Calendar."""
+    """
+    Retrieve upcoming events from Google Calendar.
+
+    Args:
+        days (int): Number of days to look ahead for events. Defaults to 7.
+
+    Returns:
+        dict: A dictionary containing events or error messages.
+
+    Raises:
+        HTTPException: If there's an error retrieving events.
+    """
     try:
         events = await get_upcoming_events(days)
         return {"events": events}
     except FileNotFoundError:
-        return {"events": [], "message": "Google Calendar integration not set up. Please add client_secret.json to the backend directory."}
+        return {
+            "events": [],
+            "message": "Google Calendar integration not set up. Please add client_secret.json to the backend directory.",
+        }
     except HTTPException as e:
         if e.status_code == 302:
             return RedirectResponse(e.headers["Location"])
@@ -107,18 +78,39 @@ async def get_calendar_events(days: int = 7):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/oauth2callback")
 async def oauth2_callback(request: Request):
-    """Handle the OAuth2 callback from Google."""
+    """
+    Handle the OAuth2 callback from Google.
+
+    Args:
+        request (Request): The incoming request object.
+
+    Returns:
+        RedirectResponse: Redirects to the frontend after successful authentication.
+
+    Raises:
+        HTTPException: If there's an error during the OAuth2 callback process.
+    """
     try:
         result = await handle_oauth2_callback(request)
-        return RedirectResponse(url="http://localhost:3000")  # Redirect to frontend after successful authentication
+        return RedirectResponse(url="http://localhost:3000")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/refresh_calendar_auth")
 async def refresh_calendar_auth():
-    """Endpoint to manually trigger calendar re-authentication."""
+    """
+    Endpoint to manually trigger calendar re-authentication.
+
+    Returns:
+        dict: A message indicating successful authentication refresh.
+
+    Raises:
+        HTTPException: If there's an error during the re-authentication process.
+    """
     try:
         get_calendar_service()  # This will trigger re-authentication if needed
         return {"message": "Calendar authentication refreshed successfully"}
@@ -128,6 +120,7 @@ async def refresh_calendar_auth():
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
