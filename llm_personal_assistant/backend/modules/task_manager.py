@@ -2,44 +2,56 @@
 Task management module for the LLM-powered personal assistant.
 
 This module handles the creation, retrieval, updating, and deletion of tasks.
-It also integrates with the LLM for task analysis and scheduling suggestions.
 """
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+from sqlalchemy.future import select
 from database import Task
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
 
-async def create_task(db: AsyncSession, title: str, description: str, due_date: datetime = None) -> Task:
-    """Create a new task."""
-    task = Task(title=title, description=description, due_date=due_date)
-    db.add(task)
-    await db.commit()
-    await db.refresh(task)
-    return task
+class TaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
 
-async def get_tasks(db: AsyncSession, skip: int = 0, limit: int = 100):
-    """Retrieve a list of tasks."""
-    result = await db.execute(select(Task).offset(skip).limit(limit))
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    completed: Optional[bool] = None
+
+async def create_task(db: Session, task: TaskCreate):
+    db_task = Task(**task.dict())
+    db.add(db_task)
+    await db.commit()
+    await db.refresh(db_task)
+    return db_task
+
+async def get_tasks(db: Session, skip: int = 0, limit: int = 100):
+    query = select(Task).offset(skip).limit(limit)
+    result = await db.execute(query)
     return result.scalars().all()
 
-async def update_task(db: AsyncSession, task_id: int, **kwargs):
-    """Update an existing task."""
-    result = await db.execute(select(Task).filter(Task.id == task_id))
-    task = result.scalar_one_or_none()
-    if task:
-        for key, value in kwargs.items():
-            setattr(task, key, value)
+async def update_task(db: Session, task_id: int, task: TaskUpdate):
+    query = select(Task).filter(Task.id == task_id)
+    result = await db.execute(query)
+    db_task = result.scalar_one_or_none()
+    if db_task:
+        update_data = task.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_task, key, value)
         await db.commit()
-        await db.refresh(task)
-    return task
+        await db.refresh(db_task)
+    return db_task
 
-async def delete_task(db: AsyncSession, task_id: int):
-    """Delete a task."""
-    result = await db.execute(select(Task).filter(Task.id == task_id))
-    task = result.scalar_one_or_none()
-    if task:
-        await db.delete(task)
+async def delete_task(db: Session, task_id: int):
+    query = select(Task).filter(Task.id == task_id)
+    result = await db.execute(query)
+    db_task = result.scalar_one_or_none()
+    if db_task:
+        await db.delete(db_task)
         await db.commit()
         return True
     return False

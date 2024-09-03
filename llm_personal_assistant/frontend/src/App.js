@@ -10,11 +10,11 @@ import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
 import IconButton from '@mui/material/IconButton';
 import SettingsIcon from '@mui/icons-material/Settings';
+import Tooltip from '@mui/material/Tooltip';
 import DailyPrompt from './components/DailyPrompt';
 import TaskList from './components/TaskList';
 import AddTaskModal from './components/AddTaskModal';
 import CalendarEvents from './components/CalendarEvents';
-import AIAutonomyDialog from './components/AIAutonomyDialog';
 import GeneralSettings from './components/GeneralSettings';
 import axios from 'axios';
 
@@ -45,6 +45,16 @@ const App = () => {
     } catch (error) {
       console.error('Error resetting authentication:', error);
       alert('Failed to reset authentication. Please try again.');
+    }
+  };
+
+  const handleSetAIAutonomy = async (value) => {
+    try {
+      await axios.post('http://localhost:8000/ai-autonomy', { autonomous: value });
+      setAiAutonomy(value);
+    } catch (error) {
+      console.error('Error setting AI autonomy:', error);
+      alert('Failed to set AI autonomy. Please try again.');
     }
   };
 
@@ -94,7 +104,7 @@ const App = () => {
     theme.palette.text.primary = '#000000';
   }
 
-    return (
+  return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -103,9 +113,11 @@ const App = () => {
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               LLM Personal Assistant
             </Typography>
-            <IconButton color="inherit" onClick={() => setGeneralSettingsOpen(true)}>
-              <SettingsIcon />
-            </IconButton>
+            <Tooltip title="Open settings">
+              <IconButton color="inherit" onClick={() => setGeneralSettingsOpen(true)}>
+                <SettingsIcon />
+              </IconButton>
+            </Tooltip>
           </Toolbar>
         </AppBar>
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
@@ -115,11 +127,17 @@ const App = () => {
                 <Typography variant="h5" component="h2" gutterBottom>
                   Daily Prompt
                 </Typography>
+                <Typography variant="body2" gutterBottom>
+                  Reflect on your day and set your intentions with the daily prompt.
+                </Typography>
                 <DailyPrompt />
               </Paper>
               <Paper>
                 <Typography variant="h5" component="h2" gutterBottom>
                   Tasks
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                  Manage your tasks efficiently. Click on a task to expand details.
                 </Typography>
                 <TaskList />
                 <Box sx={{ mt: 2 }}>
@@ -132,20 +150,22 @@ const App = () => {
                 <Typography variant="h5" component="h2" gutterBottom>
                   Upcoming Events
                 </Typography>
+                <Typography variant="body2" gutterBottom>
+                  Stay on top of your schedule with upcoming events from your calendar.
+                </Typography>
                 <CalendarEvents />
               </Paper>
             </Grid>
           </Grid>
         </Container>
+        <Box component="footer" sx={{ mt: 'auto', py: 2, bgcolor: 'background.paper' }}>
+          <Container maxWidth="lg">
+            <Typography variant="body2" color="text.secondary" align="center">
+              LLM Personal Assistant v1.0.0 | Created by Adam Vials Moore
+            </Typography>
+          </Container>
+        </Box>
       </Box>
-      <AIAutonomyDialog
-        open={aiAutonomyDialogOpen}
-        onClose={() => setAiAutonomyDialogOpen(false)}
-        onSave={(autonomy) => {
-          setAiAutonomy(autonomy);
-        }}
-        initialAutonomy={aiAutonomy}
-      />
       <GeneralSettings
         open={generalSettingsOpen}
         onClose={() => setGeneralSettingsOpen(false)}
@@ -153,7 +173,8 @@ const App = () => {
         setDarkMode={setDarkMode}
         highContrast={highContrast}
         setHighContrast={setHighContrast}
-        onResetAuth={handleResetAuth}
+        aiAutonomy={aiAutonomy}
+        setAiAutonomy={setAiAutonomy}
       />
     </ThemeProvider>
   );

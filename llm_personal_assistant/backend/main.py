@@ -6,21 +6,20 @@ It also initializes the database connection and other necessary components.
 """
 
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from database import init_db, get_db, engine
 from modules import task_manager, prompt_system, llm_integration
-from integrations.google_calendar import (
-    get_upcoming_events,
-    handle_oauth2_callback,
-    get_calendar_service,
-)
+from integrations import google_calendar, ticktick
 from scheduler import start_scheduler
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="LLM Personal Assistant", version="0.1.0")
 
@@ -47,6 +46,113 @@ async def startup_event():
 async def root():
     """Root endpoint for testing purposes."""
     return {"message": "Welcome to the LLM Personal Assistant"}
+
+
+@app.get("/prompts/daily")
+async def get_daily_prompt(db: AsyncSession = Depends(get_db)):
+    """Retrieve the daily prompt."""
+    prompt = await prompt_system.get_daily_prompt(db)
+    return {"prompt": prompt.question if prompt else "No daily prompt available."}
+
+
+@app.get("/tasks/")
+async def get_tasks(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    """Retrieve a list of tasks."""
+    tasks = await task_manager.get_tasks(db, skip=skip, limit=limit)
+    return tasks
+
+
+@app.get("/tasks/")
+async def get_tasks(source: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
+    """
+    Retrieve a list of tasks from either local storage or TickTick.
+
+    Args:
+        source (str, optional): The source of tasks ('ticktick' or None for local).
+        db (AsyncSession): The database session.
+
+    Returns:
+        list: A list of tasks.
+    """
+    if source == 'ticktick':
+        return ticktick.get_tasks()
+    else:
+        return await task_manager.get_tasks(db)
+
+
+@app.post("/tasks/")
+async def create_task(
+        task: task_manager.TaskCreate,
+        source: Optional[str] = Query(None),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Create a new task in either local storage or TickTick.
+
+    Args:
+        task (TaskCreate): The task to create.
+        source (str, optional): The source to create the task in ('ticktick' or None for local).
+        db (AsyncSession): The database session.
+
+    Returns:
+        dict: The created task.
+    """
+    if source == 'ticktick':
+        return ticktick.create_task(task.title, task.description, task.due_date)
+    else:
+        return await task_manager.create_task(db, task)
+
+
+@app.put("/tasks/{task_id}")
+async def update_task(
+        task_id: str,
+        task: task_manager.TaskUpdate,
+        source: Optional[str] = Query(None),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Update an existing task in either local storage or TickTick.
+
+    Args:
+        task_id (str): The ID of the task to update.
+        task (TaskUpdate): The updated task data.
+        source (str, optional): The source to update the task in ('ticktick' or None for local).
+        db (AsyncSession): The database session.
+
+    Returns:
+        dict: The updated task.
+    """
+    if source == 'ticktick':
+        return ticktick.update_task(task_id, task.title, task.description, task.due_date, task.completed)
+    else:
+        return await task_manager.update_task(db, task_id, task)
+
+
+@app.delete("/tasks/{task_id}")
+async def delete_task(
+        task_id: str,
+        source: Optional[str] = Query(None),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a task from either local storage or TickTick.
+
+    Args:
+        task_id (str): The ID of the task to delete.
+        source (str, optional): The source to delete the task from ('ticktick' or None for local).
+        db (AsyncSession): The database session.
+
+    Returns:
+        dict: A message indicating success or failure.
+    """
+    if source == 'ticktick':
+        success = ticktick.delete_task(task_id)
+    else:
+        success = await task_manager.delete_task(db, task_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted successfully"}
 
 
 @app.get("/calendar/events")
@@ -120,6 +226,19 @@ async def refresh_calendar_auth():
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ai-autonomy")
+async def get_ai_autonomy():
+    """Get the current AI autonomy setting."""
+    return {"autonomous": llm_integration.get_ai_autonomy()}
+
+
+@app.post("/ai-autonomy")
+async def set_ai_autonomy(autonomous: bool):
+    """Set the AI autonomy setting."""
+    llm_integration.set_ai_autonomy(autonomous)
+    return {"message": "AI autonomy setting updated", "autonomous": autonomous}
 
 
 if __name__ == "__main__":

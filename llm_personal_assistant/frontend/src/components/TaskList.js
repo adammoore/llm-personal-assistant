@@ -1,45 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { Accordion, AccordionSummary, AccordionDetails, Typography, TextField, Button, Checkbox, Chip, IconButton } from '@mui/material';
-import { Edit, Delete, Save, Cancel, ExpandMore } from '@mui/icons-material';
+import {
+  Accordion, AccordionSummary, AccordionDetails, Typography, Checkbox,
+  IconButton, Tooltip, TextField, Select, MenuItem, FormControlLabel,
+  Switch, Box, Chip
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Cancel';
 import axios from 'axios';
 
 const TaskList = () => {
   const [tasks, setTasks] = useState([]);
   const [editingTask, setEditingTask] = useState(null);
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [useTickTick, setUseTickTick] = useState(false);
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [useTickTick]);
 
   const fetchTasks = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/tasks/');
+      const response = await axios.get(`http://localhost:8000/tasks${useTickTick ? '?source=ticktick' : ''}`);
       setTasks(response.data);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
   };
 
-
-  const handleToggleComplete = async (id) => {
+  const handleToggleComplete = async (task) => {
     try {
-      const task = tasks.find(t => t.id === id);
-      await axios.put(`http://localhost:8000/tasks/${id}`, {
-        ...task,
-        completed: !task.completed
-      });
+      const updatedTask = { ...task, completed: !task.completed };
+      await axios.put(`http://localhost:8000/tasks/${task.id}${useTickTick ? '?source=ticktick' : ''}`, updatedTask);
       fetchTasks();
     } catch (error) {
       console.error('Error updating task:', error);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`http://localhost:8000/tasks/${id}`);
-      fetchTasks();
-    } catch (error) {
-      console.error('Error deleting task:', error);
     }
   };
 
@@ -49,7 +46,7 @@ const TaskList = () => {
 
   const handleSave = async () => {
     try {
-      await axios.put(`http://localhost:8000/tasks/${editingTask.id}`, editingTask);
+      await axios.put(`http://localhost:8000/tasks/${editingTask.id}${useTickTick ? '?source=ticktick' : ''}`, editingTask);
       setEditingTask(null);
       fetchTasks();
     } catch (error) {
@@ -57,24 +54,55 @@ const TaskList = () => {
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingTask(null);
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`http://localhost:8000/tasks/${id}${useTickTick ? '?source=ticktick' : ''}`);
+      fetchTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
+  const filteredTasks = hideCompleted ? tasks.filter(task => !task.completed) : tasks;
 
   return (
-    <div>
-      {tasks.map((task) => (
-        <Accordion key={task.id}>
-          <AccordionSummary expandIcon={<ExpandMore />}>
+    <Box>
+      <Box sx={{ mb: 2 }}>
+        <FormControlLabel
+          control={<Switch checked={hideCompleted} onChange={() => setHideCompleted(!hideCompleted)} />}
+          label="Hide Completed Tasks"
+        />
+        <FormControlLabel
+          control={<Switch checked={useTickTick} onChange={() => setUseTickTick(!useTickTick)} />}
+          label="Use TickTick"
+        />
+      </Box>
+      {filteredTasks.map((task) => (
+        <Accordion
+          key={task.id}
+          sx={{
+            bgcolor: task.completed ? 'action.disabledBackground' : 'background.paper',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            aria-label="Expand"
+            aria-controls="additional-actions1-content"
+            id="additional-actions1-header"
+          >
+            <Checkbox
+              checked={task.completed}
+              onChange={() => handleToggleComplete(task)}
+              onClick={(event) => event.stopPropagation()}
+              onFocus={(event) => event.stopPropagation()}
+            />
             <Typography sx={{ width: '33%', flexShrink: 0 }}>{task.title}</Typography>
-            <Typography sx={{ color: 'text.secondary' }}>
-              {task.completed ? 'Completed' : 'Pending'}
-            </Typography>
+            <Chip label={task.category || 'Uncategorized'} size="small" />
           </AccordionSummary>
           <AccordionDetails>
             {editingTask && editingTask.id === task.id ? (
-              <>
+              <Box>
                 <TextField
                   fullWidth
                   label="Title"
@@ -91,34 +119,47 @@ const TaskList = () => {
                   multiline
                   rows={2}
                 />
-                <Button startIcon={<Save />} onClick={handleSave} sx={{ mr: 1 }}>
-                  Save
-                </Button>
-                <Button startIcon={<Cancel />} onClick={handleCancelEdit}>
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <>
-                <Typography>{task.description}</Typography>
-                <Chip label={task.category || 'Uncategorized'} size="small" sx={{ mt: 1, mr: 1 }} />
-                <Checkbox
-                  checked={task.completed}
-                  onChange={() => handleToggleComplete(task.id)}
-                  inputProps={{ 'aria-label': 'Task completion status' }}
+                <TextField
+                  fullWidth
+                  label="Category"
+                  value={editingTask.category}
+                  onChange={(e) => setEditingTask({ ...editingTask, category: e.target.value })}
+                  margin="normal"
                 />
-                <IconButton aria-label="edit" onClick={() => handleEdit(task)} sx={{ mr: 1 }}>
-                  <Edit />
-                </IconButton>
-                <IconButton aria-label="delete" onClick={() => handleDelete(task.id)}>
-                  <Delete />
-                </IconButton>
-              </>
+                <Box sx={{ mt: 2 }}>
+                  <Tooltip title="Save changes">
+                    <IconButton onClick={handleSave}>
+                      <SaveIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Cancel editing">
+                    <IconButton onClick={() => setEditingTask(null)}>
+                      <CancelIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+            ) : (
+              <Box>
+                <Typography>{task.description}</Typography>
+                <Box sx={{ mt: 2 }}>
+                  <Tooltip title="Edit task">
+                    <IconButton onClick={() => handleEdit(task)}>
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete task">
+                    <IconButton onClick={() => handleDelete(task.id)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
             )}
           </AccordionDetails>
         </Accordion>
       ))}
-    </div>
+    </Box>
   );
 };
 
