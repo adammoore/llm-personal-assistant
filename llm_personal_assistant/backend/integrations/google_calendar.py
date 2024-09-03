@@ -11,16 +11,14 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from fastapi import HTTPException
+from googleapiclient.errors import HttpError
 
-# Import for environment check
-from config import settings
-
-SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+SCOPES = ['https://www.googleapis.com/auth/calendar']  # This scope allows read and write access
 CLIENT_SECRETS_FILE = "client_secret.json"
 TOKEN_FILE = "token.json"
 
 # Allow OAuth2 insecure transport for local development
-if settings.ENVIRONMENT == "development":
+if os.environ.get('ENVIRONMENT') == "development":
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 def get_calendar_service():
@@ -79,3 +77,33 @@ async def handle_oauth2_callback(request):
         token.write(credentials.to_json())
 
     return {"message": "Successfully authenticated with Google Calendar"}
+
+async def create_event(event_data):
+    """
+    Create a new event in Google Calendar.
+
+    Args:
+        event_data (dict): A dictionary containing event details.
+
+    Returns:
+        dict: The created event data returned by Google Calendar API.
+    """
+    try:
+        service = get_calendar_service()
+        event = service.events().insert(calendarId='primary', body=event_data).execute()
+        print(f"Event created: {event.get('htmlLink')}")
+        return event
+    except HttpError as e:
+        print(f"An error occurred: {e}")
+        if e.resp.status == 403 and "insufficient authentication scopes" in str(e):
+            # Token might be outdated, try to refresh
+            os.remove(TOKEN_FILE)
+            service = get_calendar_service()  # This will trigger re-authentication
+            event = service.events().insert(calendarId='primary', body=event_data).execute()
+            print(f"Event created after re-authentication: {event.get('htmlLink')}")
+            return event
+        else:
+            raise
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        raise
