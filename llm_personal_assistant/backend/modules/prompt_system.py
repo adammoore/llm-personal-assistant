@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import Base
 import enum
 from datetime import datetime
+from typing import List
 
 class TimeperiodEnum(enum.Enum):
     DAILY = "daily"
@@ -61,7 +62,7 @@ async def initialize_prompts(db: AsyncSession):
             db.add(prompt)
         await db.commit()
 
-async def get_prompts_for_timeperiod(db: AsyncSession, timeperiod: TimeperiodEnum):
+async def get_prompts_for_timeperiod(db: AsyncSession, timeperiod: TimeperiodEnum) -> List[Prompt]:
     """Retrieve prompts for a specific time period."""
     result = await db.execute(select(Prompt).filter(Prompt.timeperiod == timeperiod))
     return result.scalars().all()
@@ -77,4 +78,9 @@ async def save_prompt_response(db: AsyncSession, prompt_id: int, response: str):
 async def get_prompt_by_id(db: AsyncSession, prompt_id: int):
     """Retrieve a prompt by its ID."""
     result = await db.execute(select(Prompt).filter(Prompt.id == prompt_id))
+    return result.scalar_one_or_none()
+
+async def get_daily_prompt(db: AsyncSession):
+    """Retrieve the daily prompt."""
+    result = await db.execute(select(Prompt).filter(Prompt.timeperiod == TimeperiodEnum.DAILY))
     return result.scalar_one_or_none()

@@ -56,13 +56,6 @@ async def get_daily_prompt(db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/tasks/")
-async def get_tasks(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """Retrieve a list of tasks."""
-    tasks = await task_manager.get_tasks(db, skip=skip, limit=limit)
-    return tasks
-
-
-@app.get("/tasks/")
 async def get_tasks(source: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
     """
     Retrieve a list of tasks from either local storage or TickTick.
@@ -170,7 +163,7 @@ async def get_calendar_events(days: int = 7):
         HTTPException: If there's an error retrieving events.
     """
     try:
-        events = await get_upcoming_events(days)
+        events = await google_calendar.get_upcoming_events(days)
         return {"events": events}
     except FileNotFoundError:
         return {
@@ -200,7 +193,7 @@ async def oauth2_callback(request: Request):
         HTTPException: If there's an error during the OAuth2 callback process.
     """
     try:
-        result = await handle_oauth2_callback(request)
+        result = await google_calendar.handle_oauth2_callback(request)
         return RedirectResponse(url="http://localhost:3000")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -218,7 +211,7 @@ async def refresh_calendar_auth():
         HTTPException: If there's an error during the re-authentication process.
     """
     try:
-        get_calendar_service()  # This will trigger re-authentication if needed
+        google_calendar.get_calendar_service()  # This will trigger re-authentication if needed
         return {"message": "Calendar authentication refreshed successfully"}
     except HTTPException as e:
         if e.status_code == 302:
