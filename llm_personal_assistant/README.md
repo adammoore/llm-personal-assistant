@@ -1,22 +1,22 @@
 # LLM Personal Assistant
 
-An AI-powered personal assistant designed to help individuals with ADHD manage their tasks and schedules more effectively.
+An AI-powered personal assistant designed to help individuals, especially those with ADHD, manage their tasks and schedules more effectively.
 
 ## Features
 
-- Task Management: Create, read, update, and delete tasks
-- LLM Integration: Analyze tasks and responses using Anthropic's Claude model
-- Google Calendar Integration: View and manage your upcoming events
-- Prompt System: Daily, weekly, and monthly prompts to help manage tasks and priorities
-- User-friendly Interface: Built with React and Material-UI
+- Task Management: Create, read, update, and delete tasks with ease
+- LLM Integration: Analyze tasks using Anthropic's Claude model for intelligent suggestions
+- Google Calendar Integration: View and manage your upcoming events seamlessly
+- User-friendly Interface: Built with React and Material-UI, optimized for neurodiverse users
+- AI Autonomy Controls: Customize the level of AI assistance to suit your needs
 
 ## Prerequisites
 
 - Python 3.8+
 - Node.js 14+
 - npm 6+
+- Google Cloud Console account with Calendar API enabled
 - Anthropic API key
-- Google Cloud Console project with Calendar API enabled
 
 ## Setup
 
@@ -77,6 +77,14 @@ An AI-powered personal assistant designed to help individuals with ADHD manage t
 
 3. Open your browser and navigate to `http://localhost:3000`
 
+## Accessibility Features
+
+- High contrast mode for better readability
+- Customizable font sizes
+- Keyboard shortcuts for common actions
+- Screen reader-friendly components
+- Clear and concise error messages
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
@@ -93,9 +101,4 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 - Anthropic for providing the Claude AI model
 - Google Calendar API for schedule integration
-
-## Contact
-
-Adam Vials Moore - moore.adam@gmail.com
-
-Project Link: [https://github.com/adammoore/llm-personal-assistant](https://github.com/adammoore/llm-personal-assistant)
+- The ADHD and neurodiversity communities for inspiration and feedback

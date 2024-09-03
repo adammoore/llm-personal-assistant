@@ -135,6 +135,7 @@ async def process_prompt_response(db: AsyncSession, prompt: Prompt, response: st
             due_date
         )
 
+
     # Create calendar events
     for event_data in analysis.get('events', []):
         if not isinstance(event_data, dict):
@@ -146,20 +147,23 @@ async def process_prompt_response(db: AsyncSession, prompt: Prompt, response: st
         start_time = parse_time(event_data.get('start_time'))
         end_time = parse_time(event_data.get('end_time'))
 
-        if start_date and start_time:
+        # If no date is specified, use today's date
+        if not start_date:
+            start_date = datetime.now().date()
+        if not end_date:
+            end_date = start_date
+
+        if start_time:
             start_datetime = datetime.combine(start_date, start_time)
         else:
-            logger.error(f"Unable to determine start datetime for event: {event_data}")
+            logger.error(f"Unable to determine start time for event: {event_data}")
             continue
 
-        if end_date and end_time:
+        if end_time:
             end_datetime = datetime.combine(end_date, end_time)
-        elif start_datetime:
+        else:
             # If no end time is provided, assume the event is 1 hour long
             end_datetime = start_datetime + timedelta(hours=1)
-        else:
-            logger.error(f"Unable to determine end datetime for event: {event_data}")
-            continue
 
         await create_calendar_event(
             db,
