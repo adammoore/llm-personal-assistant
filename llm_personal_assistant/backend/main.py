@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database import init_db, get_db
-from modules import task_manager
+from modules import task_manager, prompt_system, llm_integration
 from integrations.google_calendar import get_upcoming_events, handle_oauth2_callback
+from scheduler import start_scheduler
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -33,7 +34,9 @@ app.add_middleware(
 async def startup_event():
     """Initialize database and other startup tasks."""
     await init_db()
-
+    async with AsyncSession(engine) as session:
+        await prompt_system.initialize_prompts(session)
+    start_scheduler()
 @app.get("/")
 async def root():
     """Root endpoint for testing purposes."""
@@ -69,6 +72,21 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task deleted successfully"}
+@app.get("/prompts/{timeperiod}")
+async def get_prompts(timeperiod: prompt_system.TimeperiodEnum, db: AsyncSession = Depends(get_db)):
+    """Retrieve prompts for a specific time period."""
+    prompts = await prompt_system.get_prompts_for_timeperiod(db, timeperiod)
+    return prompts
+
+class PromptResponse(BaseModel):
+    prompt_id: int
+    response: str
+
+@app.post("/prompts/respond")
+async def respond_to_prompt(prompt_response: PromptResponse, db: AsyncSession = Depends(get_db)):
+    """Save a user's response to a prompt."""
+    response = await prompt_system.save_prompt_response(db, prompt_response.prompt_id, prompt_response.response)
+    return response
 
 @app.get("/calendar/events")
 async def get_calendar_events(days: int = 7):
