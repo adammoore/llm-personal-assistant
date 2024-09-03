@@ -5,8 +5,9 @@ An AI-powered personal assistant designed to help individuals with ADHD manage t
 ## Features
 
 - Task Management: Create, read, update, and delete tasks
-- LLM Integration: Analyze tasks using Anthropic's Claude model
+- LLM Integration: Analyze tasks and responses using Anthropic's Claude model
 - Google Calendar Integration: View and manage your upcoming events
+- Prompt System: Daily, weekly, and monthly prompts to help manage tasks and priorities
 - User-friendly Interface: Built with React and Material-UI
 
 ## Prerequisites
@@ -14,6 +15,8 @@ An AI-powered personal assistant designed to help individuals with ADHD manage t
 - Python 3.8+
 - Node.js 14+
 - npm 6+
+- Anthropic API key
+- Google Cloud Console project with Calendar API enabled
 
 ## Setup
 
@@ -35,7 +38,16 @@ An AI-powered personal assistant designed to help individuals with ADHD manage t
    pip install -r requirements.txt
    ```
 
-4. Set up your `.env` file with the necessary environment variables.
+4. Set up your `.env` file with the necessary environment variables:
+   ```
+   DATABASE_URL=sqlite:///./test.db
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   SECRET_KEY=your_secret_key
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+   ```
+
+5. Place your `client_secret.json` file (obtained from Google Cloud Console) in the backend directory.
 
 ### Frontend
 

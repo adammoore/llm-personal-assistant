@@ -6,8 +6,14 @@ from config import settings
 import anthropic
 from integrations import google_calendar
 from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+from modules import task_manager
+from modules.prompt_system import Prompt
 
 client = anthropic.Client(api_key=settings.ANTHROPIC_API_KEY)
+
+# Specify the Anthropic API version
+ANTHROPIC_API_VERSION = "2023-06-01"  # Replace with the current version
 
 async def analyze_prompt_response(prompt: str, response: str):
     """
@@ -24,7 +30,8 @@ async def analyze_prompt_response(prompt: str, response: str):
         prompt=f"{anthropic.HUMAN_PROMPT} {system_prompt}\n\n{user_prompt}{anthropic.AI_PROMPT}",
         model="claude-v1",
         max_tokens_to_sample=300,
-        stop_sequences=[anthropic.HUMAN_PROMPT]
+        stop_sequences=[anthropic.HUMAN_PROMPT],
+        anthropic_version=ANTHROPIC_API_VERSION  # Add this line
     )
 
     # Parse the JSON response and return it
