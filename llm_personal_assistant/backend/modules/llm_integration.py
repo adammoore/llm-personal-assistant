@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from modules import task_manager
 from modules.prompt_system import Prompt
+import dateparser
 
 import logging
 logger = logging.getLogger(__name__)
@@ -77,6 +78,37 @@ async def analyze_prompt_response(prompt: str, response: str):
 
     return parsed_result
 
+
+def parse_date(date_string):
+    """
+    Parse a date string into a datetime object.
+    """
+    if not date_string:
+        return None
+
+    parsed_date = dateparser.parse(date_string)
+    if parsed_date:
+        return parsed_date.date()
+    else:
+        logger.error(f"Unable to parse date: {date_string}")
+        return None
+
+
+def parse_time(time_string):
+    """
+    Parse a time string into a datetime object.
+    """
+    if not time_string:
+        return None
+
+    parsed_time = dateparser.parse(time_string)
+    if parsed_time:
+        return parsed_time.time()
+    else:
+        logger.error(f"Unable to parse time: {time_string}")
+        return None
+
+
 async def process_prompt_response(db: AsyncSession, prompt: Prompt, response: str):
     """
     Process a user's response to a prompt, analyze it with the LLM, and create tasks and calendar events.
@@ -94,14 +126,7 @@ async def process_prompt_response(db: AsyncSession, prompt: Prompt, response: st
             logger.error(f"Unexpected task_data type: {type(task_data)}")
             continue
 
-        # Convert due_date string to datetime object
-        due_date_str = task_data.get('due_date')
-        due_date = None
-        if due_date_str:
-            try:
-                due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                logger.error(f"Invalid date format for due_date: {due_date_str}")
+        due_date = parse_date(task_data.get('due_date'))
 
         await task_manager.create_task(
             db,
@@ -115,11 +140,32 @@ async def process_prompt_response(db: AsyncSession, prompt: Prompt, response: st
         if not isinstance(event_data, dict):
             logger.error(f"Unexpected event_data type: {type(event_data)}")
             continue
+
+        start_date = parse_date(event_data.get('start_date', event_data.get('date')))
+        end_date = parse_date(event_data.get('end_date', event_data.get('date')))
+        start_time = parse_time(event_data.get('start_time'))
+        end_time = parse_time(event_data.get('end_time'))
+
+        if start_date and start_time:
+            start_datetime = datetime.combine(start_date, start_time)
+        else:
+            logger.error(f"Unable to determine start datetime for event: {event_data}")
+            continue
+
+        if end_date and end_time:
+            end_datetime = datetime.combine(end_date, end_time)
+        elif start_datetime:
+            # If no end time is provided, assume the event is 1 hour long
+            end_datetime = start_datetime + timedelta(hours=1)
+        else:
+            logger.error(f"Unable to determine end datetime for event: {event_data}")
+            continue
+
         await create_calendar_event(
             db,
             event_data.get('title', 'Untitled Event'),
-            event_data.get('start_time'),
-            event_data.get('end_time')
+            start_datetime.isoformat(),
+            end_datetime.isoformat()
         )
 
     return analysis
@@ -133,22 +179,14 @@ async def create_calendar_event(db: AsyncSession, title: str, start_time: str, e
         logger.error(f"Error creating calendar event: Missing start_time or end_time for event '{title}'")
         return None
 
-    # Convert string times to datetime objects
-    try:
-        start = datetime.fromisoformat(start_time)
-        end = datetime.fromisoformat(end_time)
-    except ValueError as e:
-        logger.error(f"Error parsing date for event '{title}': {e}")
-        return None
-
     event = {
         'summary': title,
         'start': {
-            'dateTime': start.isoformat(),
+            'dateTime': start_time,
             'timeZone': 'UTC',
         },
         'end': {
-            'dateTime': end.isoformat(),
+            'dateTime': end_time,
             'timeZone': 'UTC',
         },
     }

@@ -59,6 +59,9 @@
 15. Implemented re-authentication process for Google Calendar
 16. Added error handling for insufficient permissions in Google Calendar API
 17. Created a new endpoint for manually refreshing Google Calendar authentication
+18. Improved date and time parsing for tasks and events
+19. Added dateparser library for flexible date and time input handling
+20. Updated requirements.txt with new dependencies
 
 ## Next Steps
 1. Implement user authentication
