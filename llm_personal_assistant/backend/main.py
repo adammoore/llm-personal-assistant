@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from database import init_db, get_db, engine
 from modules import task_manager, prompt_system, llm_integration
-from integrations.google_calendar import get_upcoming_events, handle_oauth2_callback
+from integrations.google_calendar import get_upcoming_events, handle_oauth2_callback, get_calendar_service
 from scheduler import start_scheduler
 from pydantic import BaseModel
 from datetime import datetime
@@ -113,6 +113,19 @@ async def oauth2_callback(request: Request):
     try:
         result = await handle_oauth2_callback(request)
         return RedirectResponse(url="http://localhost:3000")  # Redirect to frontend after successful authentication
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/refresh_calendar_auth")
+async def refresh_calendar_auth():
+    """Endpoint to manually trigger calendar re-authentication."""
+    try:
+        get_calendar_service()  # This will trigger re-authentication if needed
+        return {"message": "Calendar authentication refreshed successfully"}
+    except HTTPException as e:
+        if e.status_code == 302:
+            return RedirectResponse(e.headers["Location"])
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
