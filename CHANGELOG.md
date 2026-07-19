@@ -25,3 +25,6 @@ Format loosely follows Keep a Changelog; dates are absolute.
 - Tagged `v1-legacy` and branched `archive/2024-fastapi-react` from the clean HEAD (pushed).
 - Moved the 2024 FastAPI/React app to `legacy/` (preserved, not live).
 - Added `autonomy.yaml`, `skills/`, new root scaffolding, and rewrote `README.md`.
+- **Skill 1 — `task-capture`**: friction-free capture to `data/tasks.json` via a
+  ruff-clean Python helper (atomic write, corrupt-store guard). `.claude/skills` symlink
+  makes skills discoverable by Claude Code. Demoed with 3 captures.
