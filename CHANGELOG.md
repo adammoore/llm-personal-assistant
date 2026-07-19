@@ -28,3 +28,9 @@ Format loosely follows Keep a Changelog; dates are absolute.
 - **Skill 1 — `task-capture`**: friction-free capture to `data/tasks.json` via a
   ruff-clean Python helper (atomic write, corrupt-store guard). `.claude/skills` symlink
   makes skills discoverable by Claude Code. Demoed with 3 captures.
+- **Shared `lib/taskstore.py`**: single owner of the store; `save_tasks()` rewrites the
+  JSON *and* a human-readable `data/tasks.md` mirror so they never drift. `capture.py`
+  refactored to a thin CLI over it.
+- **Skill 2 — `build_pa_dashboard.py`**: renders the store to a self-contained, theme-aware
+  `data/PA_DASHBOARD.html` — the PA's own surface, decoupled from CIDER. Calm/PDA-aware
+  layout (small wins, no debt ledger). Demoed visually with 4 tasks.
