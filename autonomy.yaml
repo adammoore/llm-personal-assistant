@@ -15,13 +15,14 @@ tiers:
 
   autonomous_flagged:
     # Do autonomously BUT surface the result for review; never silently final.
-    - create_draft        # email drafts (never send)
+    - propose_draft       # draft reply text written to data/drafts/ (local only, never sent)
     - create_task         # add to local task store
     - propose_calendar    # a *proposed* event, not written to the calendar
     - write_checkin_note  # append a check-in trace to data/
 
   confirm_required:
     # Ask before doing. One clear yes/no.
+    - save_gmail_draft    # write a draft INTO the live mailbox (Drafts folder)
     - send_email
     - accept_invite
     - modify_calendar     # create/update/delete real events

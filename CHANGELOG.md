@@ -39,3 +39,11 @@ Format loosely follows Keep a Changelog; dates are absolute.
   and due tasks; writes a `data/daily/<date>.md` stub. `SKILL.md` frames it as a skippable
   invitation and records up-to-three intentions. Read-only; ruff clean. Demoed against live
   calendar + inboxes.
+- **Shared `lib/comms.py`**: single home for the account list + gog/himalaya read plumbing
+  + inbox noise heuristic. `glance.py` refactored onto it; noise filter tuned (safe
+  marketing phrases added).
+- **Skill 4 — `comms-triage`**: `triage.py` prints an actionable per-account shortlist
+  (each line carries an id, e.g. `[fairres #1721]`). `SKILL.md` reads only chosen bodies,
+  proposes drafts to `data/drafts/` (`propose_draft`, autonomous-flagged), and saves into
+  the live mailbox only on confirmation (`save_gmail_draft`, confirm-required) — never
+  sends. autonomy.yaml updated to split those two. Demoed against live inboxes.

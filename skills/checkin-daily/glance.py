@@ -19,89 +19,24 @@ Usage: python3 skills/checkin-daily/glance.py [--date YYYY-MM-DD] [--per-account
 from __future__ import annotations
 
 import argparse
-import json
-import re
-import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.taskstore import load_tasks, repo_root  # noqa: E402
-
-# Canonical account list lives in autonomy.yaml (comms.accounts); mirrored here to stay
-# dependency-free. id = label; cal = gog account; mail = himalaya account.
-ACCOUNTS = [
-    {"id": "personal", "cal": "moore.adam@gmail.com", "mail": "moore-adam"},
-    {"id": "fairres", "cal": "fairresconman@gmail.com", "mail": "fairresconman"},
-]
-
-# Lightweight noise heuristic. If any pattern hits the sender name/address or subject,
-# the item is treated as low-signal and hidden from the glance (counted, not shown).
-# This is deliberately coarse; the skill (Claude) refines judgement on what remains.
-NOISE = re.compile(
-    r"no[-_]?reply|newsletter|digest|unsubscribe|receipt|invoice|statement|linkedin|"
-    r"\d+%\s*off|\bsale\b|promo|webinar|marketing|notifications?@|mailer|bounce|"
-    r"quora|deals?\b|e-?newsletter|talent (network|pipeline)|boating",
-    re.IGNORECASE,
-)
-
-
-def _run(cmd: list[str], timeout: int = 25) -> str:
-    """Run a command, returning stdout ('' on any failure — a glance must never crash)."""
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return out.stdout if out.returncode == 0 else ""
-    except (subprocess.SubprocessError, OSError):
-        return ""
 
 
 def calendar_today(cal_account: str, day: date) -> list[dict]:
-    """Today's events for one account via gog, as [{when, title, location}]."""
-    raw = _run(["gog", "-a", cal_account, "calendar", "events", "list",
-                "--from", day.isoformat(), "--to", day.isoformat(), "--json"])
-    if not raw:
-        return []
-    try:
-        events = json.loads(raw).get("events", [])
-    except json.JSONDecodeError:
-        return []
-    out = []
-    for ev in events:
-        start = ev.get("start", {})
-        when = start.get("dateTime", "") or start.get("date", "")
-        # Show HH:MM for timed events, "all day" for date-only.
-        label = when[11:16] if "T" in when else "all day"
-        out.append({"when": label, "title": ev.get("summary", "(no title)"),
-                    "location": (ev.get("location") or "").strip()})
-    return out
+    """Today's events for one account (thin wrapper over the shared helper)."""
+    return calendar_events(cal_account, day, day)
 
 
 def inbox(mail_account: str, limit: int = 25) -> tuple[list[dict], int]:
-    """Recent mail via himalaya, split into (worth_a_look, noise_count)."""
-    raw = _run(["himalaya", "envelope", "list", "-a", mail_account,
-                "--page-size", str(limit), "-o", "json"])
-    if not raw:
-        return [], 0
-    try:
-        envs = json.loads(raw)
-    except json.JSONDecodeError:
-        return [], 0
-    worth, noise = [], 0
-    for e in envs:
-        frm = e.get("from", {}) or {}
-        hay = " ".join([frm.get("name") or "", frm.get("addr") or "", e.get("subject") or ""])
-        if NOISE.search(hay):
-            noise += 1
-            continue
-        worth.append({
-            "from": frm.get("name") or frm.get("addr") or "(unknown)",
-            "subject": (e.get("subject") or "(no subject)").strip(),
-            "date": (e.get("date") or "")[:10],
-            "unread": "Seen" not in (e.get("flags") or []),
-        })
-    return worth, noise
+    """Recent mail split into (worth_a_look, noise_count) via the shared lib."""
+    return partition_inbox(fetch_inbox(mail_account, limit))
 
 
 def due_tasks(day: date) -> list[dict]:
