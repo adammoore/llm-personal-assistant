@@ -34,3 +34,8 @@ Format loosely follows Keep a Changelog; dates are absolute.
 - **Skill 2 — `build_pa_dashboard.py`**: renders the store to a self-contained, theme-aware
   `data/PA_DASHBOARD.html` — the PA's own surface, decoupled from CIDER. Calm/PDA-aware
   layout (small wins, no debt ledger). Demoed visually with 4 tasks.
+- **Skill 3 — `checkin-daily`**: `glance.py` gathers today's calendar (both accounts, via
+  gog), a *prioritised* inbox shortlist (both accounts via himalaya, noise counted+hidden),
+  and due tasks; writes a `data/daily/<date>.md` stub. `SKILL.md` frames it as a skippable
+  invitation and records up-to-three intentions. Read-only; ruff clean. Demoed against live
+  calendar + inboxes.
