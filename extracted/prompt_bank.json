@@ -1,0 +1,18 @@
+{
+  "_source": "llm_personal_assistant/backend/modules/prompt_system.py  (SAMPLE_PROMPTS)",
+  "_extracted": "2026-07-19 Phase 0 audit",
+  "_note": "Initiation/check-in prompts, keyed by cadence. Feed these into the new checkin-daily / checkin-weekly / checkin-monthly skills. Reword as invitations, not demands (PDA-aware).",
+  "timeperiods": ["daily", "weekly", "monthly"],
+  "prompts": [
+    { "question": "What are your main goals for today?", "timeperiod": "daily" },
+    { "question": "Do you have any appointments or meetings to schedule?", "timeperiod": "daily" },
+    { "question": "Do you need to follow up on any communications today?", "timeperiod": "daily" },
+    { "question": "Are there any important deadlines coming up this week?", "timeperiod": "weekly" },
+    { "question": "Are there any tasks you've been procrastinating on?", "timeperiod": "weekly" },
+    { "question": "What self-care activities do you want to prioritize this week?", "timeperiod": "weekly" },
+    { "question": "What tasks depend on other tasks or people?", "timeperiod": "weekly" },
+    { "question": "What long-term projects do you need to make progress on this month?", "timeperiod": "monthly" },
+    { "question": "Are there any skills you want to work on improving this month?", "timeperiod": "monthly" },
+    { "question": "What do you want to achieve in your free time this month?", "timeperiod": "monthly" }
+  ]
+}

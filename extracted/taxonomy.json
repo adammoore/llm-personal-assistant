@@ -1,0 +1,23 @@
+{
+  "_extracted": "2026-07-19 Phase 0 audit",
+  "_note": "Small, flat taxonomies from the legacy app. Carry these into the new task store / data schema as sensible defaults; extend rather than replace.",
+  "task_categories": {
+    "_source": "llm_personal_assistant/frontend/src/components/TaskList.js  (categories)",
+    "values": ["Work", "Personal", "Health", "Finance", "Other"],
+    "default": "Other"
+  },
+  "check_in_cadence": {
+    "_source": "llm_personal_assistant/backend/modules/prompt_system.py  (TimeperiodEnum)",
+    "values": ["daily", "weekly", "monthly"]
+  },
+  "task_fields": {
+    "_source": "legacy SQLite tasks table (backend/test.db) + task_manager.py",
+    "fields": ["id", "title", "description", "due_date", "completed", "created_at", "updated_at"],
+    "note": "No 'category' column existed server-side — category lived only in the React UI state. Persist it in the new store."
+  },
+  "autonomy_legacy": {
+    "_source": "llm_personal_assistant/frontend/src/components/AIAutonomyDialog.js + backend/ai_autonomy.py",
+    "shape": "single boolean toggle: 'Allow AI to act autonomously' (on/off)",
+    "note": "Brief goal #7 replaces this with granular tiers in autonomy.yaml (read/summarize -> autonomous; drafts/proposals -> autonomous-but-flagged; send/accept/modify -> confirm; delete -> never)."
+  }
+}

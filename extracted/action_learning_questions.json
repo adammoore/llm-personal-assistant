@@ -1,0 +1,26 @@
+{
+  "_source": "llm_personal_assistant/frontend/src/components/DailyPrompt.js  (actionLearningQuestions)",
+  "_extracted": "2026-07-19 Phase 0 audit",
+  "_note": "The 'Twenty Questions' action-learning reflection bank (19 items as shipped). Brief goal #6: weave ONE question per weekly/monthly check-in, never a batch. Always offer a skip/later path.",
+  "questions": [
+    "How do you feel about this situation?",
+    "What would be an ideal outcome or solution?",
+    "What would be a good short-term goal?",
+    "On a scale of 0-10 how achievable are my goals short-term or long-term?",
+    "If low, what can I do to make them achievable?",
+    "What are the effects of this situation on you?",
+    "What are the effects of this situation on others?",
+    "What are the effects of not doing anything?",
+    "What have you tried so far?",
+    "What have you not tried out fully?",
+    "What other options are there?",
+    "What is holding you back?",
+    "What is really going on?",
+    "What do you really want?",
+    "Imagine someone whose advice you respect were here – what advice would they give?",
+    "If you could change only one thing, what would it be?",
+    "What help is available?",
+    "What are you willing to commit to?",
+    "What level of commitment do I have to this action on a scale of 1-10? What will I do to get the level of commitment higher?"
+  ]
+}

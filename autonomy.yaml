@@ -1,0 +1,62 @@
+# autonomy.yaml — what the PA may do on its own, per ADR-001 §7.
+# Skills MUST consult this before acting. Tiers are ordered least→most restricted.
+# A skip/confirm path is always available regardless of tier (neurodivergent-first).
+
+version: 1
+
+tiers:
+  autonomous:
+    # Do freely, no announcement needed beyond the durable trace in data/.
+    - read_email          # gog / himalaya read
+    - read_calendar       # gog calendar list/search
+    - read_messages       # local chat.db (read-only) + WhatsApp export analysis
+    - summarize           # inbox/calendar/meeting summaries
+    - read_tasks          # read the local task store
+
+  autonomous_flagged:
+    # Do autonomously BUT surface the result for review; never silently final.
+    - create_draft        # email drafts (never send)
+    - create_task         # add to local task store
+    - propose_calendar    # a *proposed* event, not written to the calendar
+    - write_checkin_note  # append a check-in trace to data/
+
+  confirm_required:
+    # Ask before doing. One clear yes/no.
+    - send_email
+    - accept_invite
+    - modify_calendar     # create/update/delete real events
+    - send_signal_message # nudges are pre-approved (see nudges below); ad-hoc sends confirm
+
+  never:
+    # Never autonomous. Human does this by hand.
+    - delete_task
+    - delete_email
+    - delete_calendar_event
+    - delete_any
+
+# Nudges are a pre-authorized exception: scheduled check-in invitations may be sent via
+# Signal + calendar reminder without per-message confirmation, because each carries a
+# one-tap, zero-consequence skip.
+nudges:
+  channels: [signal, calendar_reminder]
+  pre_authorized: true
+  always_skippable: true
+
+# Comms scoping (ADR-001 §4): both accounts, kept in separate labelled sections.
+comms:
+  accounts:
+    - id: personal
+      address: moore.adam@gmail.com
+      himalaya: moore-adam
+    - id: fairres
+      address: fairresconman@gmail.com
+      himalaya: fairresconman
+  blend_threads: false      # never merge the two identities
+  send: false               # draft-only by default (--gmail-no-send)
+
+# iMessage (ADR-001 §5): read-only, requires Full Disk Access + standing consent.
+imessage:
+  enabled: true
+  read_only: true
+  requires_full_disk_access: true
+  consent_recorded: 2026-07-19
