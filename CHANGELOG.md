@@ -3,6 +3,19 @@
 All notable changes to this project. Successor to the legacy `updates.txt` habit.
 Format loosely follows Keep a Changelog; dates are absolute.
 
+## [Unreleased] — source integrations
+
+- **Apple Notes** (`lib/applenotes.py`): capture mirrors into a dedicated PA-owned note
+  (`PA Inbox`) — never edits Adam's existing notes. Read helpers (`list_titles`, `read_note`)
+  available for surfacing list content, with the guardrail that case/medical content is never
+  pushed into PA outputs. `task-capture` now writes local store + PA Inbox (best-effort,
+  `--no-notes` to skip). AppleScript via stdin+argv (no escaping); ruff clean; live-tested.
+- **Work OneDrive/SharePoint** (`lib/onedrive.py`): read-only, metadata-only view of recently
+  touched files in the official OneDrive sync folder (sanctioned client path — no scraping,
+  no credentials). Lists name/folder/when only; never copies document contents. Live-tested
+  against the University of Westminster sync root; ruff clean.
+- See `ROADMAP.md` for remaining work sources (Outlook, Teams, Slack) and Signal/iPhone.
+
 ## [2.0.0] — agent-native overhaul (2026-07-20)
 
 **Migration summary.** The 2024 FastAPI + React + SQLite app is retired and rebuilt as a set

@@ -21,6 +21,7 @@ from pathlib import Path
 # Make the repo-root importable so `lib` resolves regardless of the cwd the skill runs from.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from lib.applenotes import append_to_pa_note  # noqa: E402
 from lib.taskstore import CATEGORIES, DEFAULT_CATEGORY, add_task  # noqa: E402
 
 
@@ -33,7 +34,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--source", default="chat", help="where the task came from (chat/signal)")
     p.add_argument("--store", default=None, type=Path,
                    help="override JSON store path (testing); .md mirror sits beside it")
+    p.add_argument("--no-notes", action="store_true",
+                   help="do not mirror the task into the Apple Notes 'PA Inbox' note")
     return p.parse_args(argv)
+
+
+def _notes_line(task: dict) -> str:
+    """One-line rendering of a task for the PA Inbox note."""
+    line = f"☐ {task['title']} [{task['category']}]"
+    if task.get("due_date"):
+        line += f" — due {task['due_date']}"
+    return line
 
 
 def main(argv: list[str]) -> int:
@@ -48,6 +59,11 @@ def main(argv: list[str]) -> int:
         json_path=args.store,
         md_path=md_path,
     )
+    # Mirror into the dedicated Apple Notes "PA Inbox" (best-effort; the local store is
+    # canonical, so a Notes/permission failure must not fail the capture).
+    task["mirrored_to_notes"] = False
+    if not args.no_notes and args.store is None:
+        task["mirrored_to_notes"] = append_to_pa_note(_notes_line(task))
     print(json.dumps(task, ensure_ascii=False))
     return 0
 

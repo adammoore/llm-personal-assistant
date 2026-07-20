@@ -22,10 +22,10 @@ by request after launch, and who does what.
 | Gmail ×2 (personal, fairres) | gog / himalaya | ✅ live | — |
 | Google Calendar ×2 | gog | ✅ live | — |
 | Local task store | lib/taskstore | ✅ live | — |
-| **Apple Notes (all notes)** | AppleScript: read all, capture into a target note | 🔨 to build | Adam: name the capture-target note |
+| **Apple Notes (all notes)** | AppleScript: read all, capture into PA-owned `PA Inbox` note | ✅ built | — |
 | **Signal nudges → phone** | openclaw message send (wired) | ⏳ blocked | Adam: register signal-cli + run :8080 daemon (SIGNAL_SETUP.md) |
 | **iPhone two-way (inbound)** | `openclaw agents add/bind` → PA repo workspace | ⏳ after Signal | assistant, once Signal up |
-| **Work OneDrive / SharePoint** | official OneDrive.app sync → PA reads local files | ⏳ chosen path A | Adam: sign in + sync a folder; then assistant builds reader |
+| **Work OneDrive / SharePoint** | official OneDrive.app sync → PA reads local files | ✅ reader built (metadata-only) | — (signed in, syncing) |
 | **Work Outlook (mail/cal)** | IMAP via himalaya, or ICS calendar publish, if tenant allows; else browser | 🔜 TBD | Adam: check what tenant permits |
 | **Work Teams** | sanctioned client / browser (fragile) | 🔜 later | TBD |
 | **Slack (notch8.slack.com)** | no MCP available — per-user token/app or browser automation | 🔜 TBD | Adam: create a Slack user token, or approve browser path |
