@@ -60,3 +60,16 @@ Format loosely follows Keep a Changelog; dates are absolute.
   `data/reviews/<quarter>.md` digest; SKILL.md then enriches with Granola meetings + the
   evidence store (MCP at runtime) and drafts a review in Adam's voice. Draft-only, never
   sends. Read-only assemble; ruff clean; live-tested. **Phase 2 skills complete.**
+
+### Phase 3 — Schedules & nudges (authored 2026-07-20, awaiting install sign-off)
+- `schedule/run_checkin.sh <cadence>`: scheduled half of a check-in — runs the deterministic
+  prep (refreshes the durable note) then sends ONE skippable Signal invitation. Never runs
+  the interactive check-in (ignoring the nudge = zero-consequence skip). shellcheck clean.
+- `schedule/nudge.sh`: configurable Signal sender, **safe by default** — sends nothing until
+  `schedule/nudge.env` (git-ignored) sets `NUDGE_CMD` (OpenClaw/send_signal_alert) or
+  `SIGNAL_FROM`+`SIGNAL_TO` (signal-cli). Unconfigured = logs intended message, no send.
+- Three launchd plists (`schedule/launchagents/`, house-style, no RunAtLoad): daily 07:30,
+  weekly Mon 08:00, monthly 1st 09:00. plutil-valid.
+- `schedule/README.md` + `nudge.env.example`. DRY_RUN pipeline verified end-to-end (prep ran,
+  note refreshed, nudge no-op'd — nothing sent, nothing installed).
+- Calendar-reminder channel documented (recurring events, confirm-required) — created on OK.

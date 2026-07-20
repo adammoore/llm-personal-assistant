@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.adamvialsmoore.pa-checkin-weekly.plist
+  ──────────────────────────────────────────
+  macOS LaunchAgent: fires the weekly check-in at 08:00 every Monday. Runs the deterministic
+  prep (checkin-weekly horizon -> refreshes data/weekly/<YYYY-Www>.md) and sends ONE
+  skippable Signal invitation. No RunAtLoad.
+
+  INSTALL:
+    cp schedule/launchagents/com.adamvialsmoore.pa-checkin-weekly.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-weekly.plist
+
+  MANAGE:
+    Run now:  launchctl start com.adamvialsmoore.pa-checkin-weekly
+    Unload:   launchctl unload ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-weekly.plist
+    Logs:     tail -f /tmp/pa-checkin-weekly.log  (and data/logs/checkin-weekly.log)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adamvialsmoore.pa-checkin-weekly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/adamvialsmoore/llm-personal-assistant/schedule/run_checkin.sh</string>
+    <string>weekly</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/adamvialsmoore/llm-personal-assistant</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- 08:00 every Monday (Weekday 1) -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>8</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/pa-checkin-weekly.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pa-checkin-weekly-error.log</string>
+</dict>
+</plist>

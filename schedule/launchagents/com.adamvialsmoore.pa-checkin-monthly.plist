@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.adamvialsmoore.pa-checkin-monthly.plist
+  ───────────────────────────────────────────
+  macOS LaunchAgent: fires the monthly check-in at 09:00 on the 1st of each month. Runs the
+  deterministic prep (checkin-monthly review -> refreshes data/monthly/<YYYY-MM>.md) and
+  sends ONE skippable Signal invitation. No RunAtLoad.
+
+  INSTALL:
+    cp schedule/launchagents/com.adamvialsmoore.pa-checkin-monthly.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-monthly.plist
+
+  MANAGE:
+    Run now:  launchctl start com.adamvialsmoore.pa-checkin-monthly
+    Unload:   launchctl unload ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-monthly.plist
+    Logs:     tail -f /tmp/pa-checkin-monthly.log  (and data/logs/checkin-monthly.log)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adamvialsmoore.pa-checkin-monthly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/adamvialsmoore/llm-personal-assistant/schedule/run_checkin.sh</string>
+    <string>monthly</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/adamvialsmoore/llm-personal-assistant</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- 09:00 on the 1st of each month -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key><integer>1</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/pa-checkin-monthly.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pa-checkin-monthly-error.log</string>
+</dict>
+</plist>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.adamvialsmoore.pa-checkin-daily.plist
+  ─────────────────────────────────────────
+  macOS LaunchAgent: fires the daily check-in at 07:30 every day. Runs the deterministic
+  prep (checkin-daily glance -> refreshes data/daily/<date>.md) and sends ONE skippable
+  Signal invitation. Ignoring it is the zero-consequence skip. No RunAtLoad, so installing
+  this never sends an unexpected nudge.
+
+  INSTALL:
+    cp schedule/launchagents/com.adamvialsmoore.pa-checkin-daily.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-daily.plist
+
+  MANAGE:
+    Run now:  launchctl start com.adamvialsmoore.pa-checkin-daily
+    Unload:   launchctl unload ~/Library/LaunchAgents/com.adamvialsmoore.pa-checkin-daily.plist
+    Status:   launchctl list | grep pa-checkin
+    Logs:     tail -f /tmp/pa-checkin-daily.log  (and data/logs/checkin-daily.log)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adamvialsmoore.pa-checkin-daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/adamvialsmoore/llm-personal-assistant/schedule/run_checkin.sh</string>
+    <string>daily</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/adamvialsmoore/llm-personal-assistant</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- 07:30 every day -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/pa-checkin-daily.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pa-checkin-daily-error.log</string>
+</dict>
+</plist>
