@@ -47,3 +47,11 @@ Format loosely follows Keep a Changelog; dates are absolute.
   proposes drafts to `data/drafts/` (`propose_draft`, autonomous-flagged), and saves into
   the live mailbox only on confirmation (`save_gmail_draft`, confirm-required) — never
   sends. autonomy.yaml updated to split those two. Demoed against live inboxes.
+- **Skill 5 — `checkin-weekly`**: `horizon.py` — 14-day deadline horizon (both calendars,
+  separate) + loose-thread sweep (overdue/due-this-week tasks); writes `data/weekly/<YYYY-Www>.md`.
+  SKILL.md invites ONE skippable action-learning question. Read-only; ruff clean; live-tested.
+- **Skill 6 — `checkin-monthly`**: `review.py` — "what changed" (open/done by category,
+  small wins), month-ahead highlights (both accounts, separate), category cleanup of undated
+  tasks; writes `data/monthly/<YYYY-MM>.md`. Read-only; ruff clean; live-tested.
+  Known gap: store has no `completed_at`, so "done this month" can't be filtered yet
+  (follow-up: add completion timestamps when a task-complete action lands).
