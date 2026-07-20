@@ -1,37 +1,40 @@
-# Signal nudges — remaining setup (your side)
+# Signal nudges — status: ✅ LIVE
 
-The nudge path is **wired and correct**: `schedule/nudge.env` routes to
-`openclaw message send --channel signal`, and OpenClaw's Signal channel is now enabled.
-`nudge.sh` fails non-fatally until the piece below is in place, so schedules run safely
-regardless.
+Outbound Signal nudges reach Adam's phone. Confirmed 2026-07-20.
 
-## The one blocker
+## The working setup
 
-OpenClaw's Signal adapter expects a local signal-cli JSON-RPC/HTTP API at
-`http://127.0.0.1:8080`, and `signal-cli listAccounts` is currently empty — i.e. signal-cli
-does not yet have your number registered/linked, and nothing is serving the API.
+```
+run_checkin.sh / nudge.sh
+   └─ NUDGE_CMD (schedule/nudge.env, git-ignored)
+        └─ openclaw message send --channel signal --target +44…
+             └─ OpenClaw gateway  →  signal-cli JSON-RPC API @ 127.0.0.1:8080
+                  └─ signal-cli 0.14.6 (linked device)  →  Signal  →  phone
+```
 
-## Steps (must be done by you — involves phone verification)
+Components:
+- **signal-cli 0.14.6** (`/opt/homebrew/bin`, ARM) — linked as a secondary device to
+  +447712553049. (The earlier 409s were an old Intel 0.14.3 build + device contention;
+  resolved by reinstalling the ARM build and re-linking cleanly.)
+- **signal-cli daemon** on `127.0.0.1:8080` — kept alive by the launch agent
+  `com.adamvialsmoore.signal-cli-daemon` (RunAtLoad + KeepAlive). Template in
+  `schedule/launchagents/*.plist.example`; the number-filled copy lives only in
+  `~/Library/LaunchAgents`.
+- **OpenClaw** `channels.signal.enabled = true`, driving signal-cli.
+- **nudge.env** (`git-ignored`): `NUDGE_CMD='openclaw message send --channel signal --target +44… -m "$NUDGE_MESSAGE"'`.
 
-1. **Register or link signal-cli to your number** (linking as a secondary device is easiest —
-   scan the QR with Signal on your phone):
-   ```bash
-   signal-cli link -n "macbook-pro"      # prints a tsdevice:/ link → render as QR, scan in Signal
-   # OR register primary (needs SMS/voice code, possibly a captcha):
-   # signal-cli -a <YOUR_NUMBER> register
-   # signal-cli -a <YOUR_NUMBER> verify <CODE>
-   ```
-2. **Serve the API OpenClaw expects on :8080.** Run signal-cli in daemon mode (or a
-   signal-cli REST API) bound to `127.0.0.1:8080`. A LaunchAgent (like the existing
-   OpenClaw / granola ones) keeps it alive across reboots.
-3. **Restart the OpenClaw gateway and test:**
-   ```bash
-   launchctl kickstart -k "gui/$(id -u)/ai.openclaw.gateway"
-   bash schedule/nudge.sh "test — did this reach my phone?"
-   ```
+## Manage / verify
 
-Verify delivery: the message should arrive in Signal on your phone. Once it does, the daily
-07:30 / weekly Mon 08:00 / monthly 1st 09:00 nudges reach you automatically.
+```bash
+launchctl list | grep signal-cli-daemon         # daemon running?
+lsof -iTCP:8080 -sTCP:LISTEN                     # :8080 served?
+bash schedule/nudge.sh "test — did this reach my phone?"
+tail -f /tmp/signal-cli-daemon.log              # daemon logs
+```
 
-(Registration/verification codes and captchas can't be done by the assistant — that step is
-yours.)
+If the daemon stops serving :8080: `launchctl kickstart -k gui/$(id -u)/com.adamvialsmoore.signal-cli-daemon`.
+
+## Still to wire (two-way / inbound)
+
+Outbound is done. To reply *from* the phone and trigger skills ("today", "capture …"),
+bind an OpenClaw agent to this repo — see `ROADMAP.md` (iPhone two-way).

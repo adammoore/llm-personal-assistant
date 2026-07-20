@@ -23,7 +23,7 @@ by request after launch, and who does what.
 | Google Calendar ×2 | gog | ✅ live | — |
 | Local task store | lib/taskstore | ✅ live | — |
 | **Apple Notes (all notes)** | AppleScript: read all, capture into PA-owned `PA Inbox` note | ✅ built | — |
-| **Signal nudges → phone** | openclaw message send (wired) | ⏳ blocked | Adam: register signal-cli + run :8080 daemon (SIGNAL_SETUP.md) |
+| **Signal nudges → phone** | openclaw message send → signal-cli daemon :8080 | ✅ LIVE (2026-07-20) | — (daemon launch agent installed) |
 | **iPhone two-way (inbound)** | `openclaw agents add/bind` → PA repo workspace | ⏳ after Signal | assistant, once Signal up |
 | **Work OneDrive / SharePoint** | official OneDrive.app sync → PA reads local files | ✅ reader built (metadata-only) | — (signed in, syncing) |
 | **Work Outlook (mail/cal)** | IMAP via himalaya, or ICS calendar publish, if tenant allows; else browser | 🔜 TBD | Adam: check what tenant permits |

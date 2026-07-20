@@ -5,6 +5,12 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 
+- **Signal nudges → phone: LIVE** (2026-07-20). signal-cli 0.14.6 (ARM) linked; a launch
+  agent (`com.adamvialsmoore.signal-cli-daemon`, RunAtLoad+KeepAlive) serves the JSON-RPC
+  API on `127.0.0.1:8080`; OpenClaw's Signal channel enabled; `nudge.env` routes via
+  `openclaw message send`. Test nudges confirmed received on the phone. Repo carries a
+  number-less plist template; SIGNAL_SETUP.md rewritten to the working setup.
+
 - **Apple Notes** (`lib/applenotes.py`): capture mirrors into a dedicated PA-owned note
   (`PA Inbox`) — never edits Adam's existing notes. Read helpers (`list_titles`, `read_note`)
   available for surfacing list content, with the guardrail that case/medical content is never
