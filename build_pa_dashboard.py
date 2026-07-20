@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""build_pa_dashboard — render the PA's own standalone dashboard.
+"""build_pa_dashboard — render the PA's own central-overview dashboard.
 
-Reads the local task store (and, as later skills land, check-in notes + comms summaries)
-and writes a single self-contained HTML file. This is the PA's own surface — deliberately
-**separate from the CIDER dashboard** (ADR-001 §3): different generator, different file,
-never touches CIDER's data or regenerate path.
+Adam's ONE central space: everything relevant in a glance — upcoming dates (both calendars,
+incl. case dates), messages needing a look, and tasks. This is distinct from the CIDER
+dashboard, whose job is the opposite: a calm, undisturbed space for deep focus on the case.
+So the PA *surfaces* case-relevant dates/messages/tasks for visibility; it just never
+generates legal work-product or writes into CIDER's data/regenerate path.
 
-Output: data/PA_DASHBOARD.html (git-ignored — it contains private task content).
+Output: data/PA_DASHBOARD.html (git-ignored — private).
 
 Design (neurodivergent-first): calm and legible, small wins acknowledged briefly, open
 work shown as an invitation — never itemised as debt. Theme-aware (light/dark).
@@ -16,11 +17,12 @@ from __future__ import annotations
 
 import html
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
 # Muted, calm category accents (accessible in both light and dark).
@@ -67,6 +69,56 @@ def _task_card(task: dict, today: date) -> str:
     )
 
 
+def _event_line(ev: dict) -> str:
+    """One upcoming-event row: date (+ time) and title."""
+    when = html.escape(ev.get("date") or "")
+    if ev.get("when") and ev["when"] != "all day":
+        when += " " + html.escape(ev["when"])
+    loc = f' · {html.escape(ev["location"][:34])}' if ev.get("location") else ""
+    return (f'<li class="row"><span class="when">{when}</span>'
+            f'<span class="what">{html.escape(ev["title"])}{loc}</span></li>')
+
+
+def _upcoming_section(today: date) -> str:
+    """Dates across both calendars for the next 14 days (case dates included)."""
+    end = today + timedelta(days=14)
+    blocks = []
+    for acct in ACCOUNTS:
+        evs = calendar_events(acct["cal"], today, end)
+        if not evs:
+            continue
+        evs.sort(key=lambda e: (e.get("date") or "", e.get("when") or ""))
+        items = "\n".join(_event_line(e) for e in evs[:12])
+        blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
+                      f'<ul class="rows">{items}</ul>')
+    if not blocks:
+        return ""
+    return ('<section class="group"><h2>Upcoming<span class="count">14 days</span></h2>'
+            + "".join(blocks) + "</section>")
+
+
+def _messages_section() -> str:
+    """Messages worth a look across both inboxes (kept separate)."""
+    blocks = []
+    for acct in ACCOUNTS:
+        worth, noise = partition_inbox(fetch_inbox(acct["mail"]))
+        if not worth:
+            blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
+                          f'<ul class="rows"><li class="row"><span class="what muted">'
+                          f'nothing standing out ({noise} quiet)</span></li></ul>')
+            continue
+        rows = []
+        for m in worth[:5]:
+            dot = "•" if m["unread"] else "◦"
+            rows.append(f'<li class="row"><span class="when">{dot}</span>'
+                        f'<span class="what">{html.escape(m["from"])}: '
+                        f'{html.escape(m["subject"][:60])}</span></li>')
+        blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
+                      f'<ul class="rows">{"".join(rows)}</ul>')
+    return ('<section class="group"><h2>Needs a look<span class="count">mail</span></h2>'
+            + "".join(blocks) + "</section>")
+
+
 def _render_html(tasks: list[dict], today: date) -> str:
     """Assemble the full self-contained dashboard document."""
     open_tasks = [t for t in tasks if not t.get("completed")]
@@ -110,6 +162,11 @@ def _render_html(tasks: list[dict], today: date) -> str:
         open_count=len(open_tasks),
         overdue_note=overdue_note,
         wins=wins,
+        upcoming_body=_upcoming_section(today),
+        messages_body=_messages_section(),
+        tasks_header=('<section class="group"><h2>Tasks'
+                      f'<span class="count">{len(open_tasks)}</span></h2></section>'
+                      if open_tasks else ""),
         open_body=open_body,
     )
 
@@ -173,6 +230,17 @@ _PAGE = """<!doctype html>
     border:1px solid var(--line); color:var(--muted); }}
   .due-overdue {{ color:var(--overdue); border-color:var(--overdue); }}
   .due-today {{ color:var(--today); border-color:var(--today); }}
+  .sub {{ font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); font-weight:650; margin:.7rem 0 .2rem; }}
+  .sub:first-child {{ margin-top:0; }}
+  ul.rows {{ list-style:none; margin:0; padding:0; }}
+  li.row {{ display:flex; gap:.6rem; padding:.32rem 0; border-top:1px solid var(--line);
+    font-size:.92rem; }}
+  li.row:first-child {{ border-top:none; }}
+  .when {{ flex:0 0 auto; color:var(--muted); font-variant-numeric:tabular-nums;
+    min-width:5.4rem; }}
+  .what {{ flex:1 1 auto; }}
+  .what.muted {{ color:var(--muted); }}
   .empty {{ color:var(--muted); text-align:center; padding:2rem 0; }}
   footer {{ color:var(--muted); font-size:.78rem; text-align:center; margin-top:2rem; }}
 </style>
@@ -186,8 +254,11 @@ _PAGE = """<!doctype html>
     {overdue_note}
     {wins}
   </header>
+  {upcoming_body}
+  {messages_body}
+  {tasks_header}
   {open_body}
-  <footer>Your PA — separate from CIDER · generated locally, private</footer>
+  <footer>Your central overview · CIDER is your focus space · generated locally, private</footer>
 </main>
 </body>
 </html>
