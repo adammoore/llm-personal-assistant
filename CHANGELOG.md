@@ -55,3 +55,8 @@ Format loosely follows Keep a Changelog; dates are absolute.
   tasks; writes `data/monthly/<YYYY-MM>.md`. Read-only; ruff clean; live-tested.
   Known gap: store has no `completed_at`, so "done this month" can't be filtered yet
   (follow-up: add completion timestamps when a task-complete action lands).
+- **Skill 7 — `quarterly-review`**: `assemble.py` gathers deterministic local sources
+  (daily/weekly/monthly notes, task activity by category, read-only git log) into a
+  `data/reviews/<quarter>.md` digest; SKILL.md then enriches with Granola meetings + the
+  evidence store (MCP at runtime) and drafts a review in Adam's voice. Draft-only, never
+  sends. Read-only assemble; ruff clean; live-tested. **Phase 2 skills complete.**
