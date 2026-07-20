@@ -59,6 +59,12 @@ if [[ "${CADENCE}" == "daily" ]]; then
   else
     log "PA Today refresh failed (non-fatal)"
   fi
+  # Energy-aware weave: append the easiest low-activation start to the invitation.
+  QUICK_WIN="$(python3 "${REPO}/skills/checkin-daily/quick_win.py" 2>/dev/null)"
+  if [[ -n "${QUICK_WIN}" ]]; then
+    INVITE="${INVITE} (${QUICK_WIN})"
+    log "quick-win woven: ${QUICK_WIN}"
+  fi
 fi
 
 # Send (or, in DRY_RUN, just log) the skippable invitation.

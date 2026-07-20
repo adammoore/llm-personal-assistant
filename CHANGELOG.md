@@ -4,6 +4,11 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Test harness**: `tests/smoke.py` — one-command end-to-end smoke test (10 checks, safe:
+  temp store, read-only sources, no sends). Documented at the top of TESTING.md.
+- **Polish**: unified activity timeline now sorts **soonest-first** (undated last); the daily
+  nudge auto-weaves an energy-aware **"Easiest start: …"** (lowest-activation task, via
+  `skills/checkin-daily/quick_win.py`).
 - **Salvage from prior repos (4 items, built in parallel):**
   - *Energy + breakdown*: task store gains `energy` (low/med/high), `estimate_min`, and
     `steps`; `task-capture` gets `--energy/--estimate/--step`; `focus` shows effort + first

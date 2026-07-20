@@ -69,13 +69,15 @@ class Activity:
         }
 
 
-def _sort_key(activity: Activity) -> str:
-    """Sort key for newest/soonest-first: timestamp desc, undated items last.
+def _sort_key(activity: Activity) -> tuple[int, str]:
+    """Sort key for SOONEST-first: dated items ascending by timestamp, undated items last.
 
-    Descending sort puts the largest (latest / furthest-future) ISO string first; an
-    empty string for a missing timestamp naturally sinks to the bottom of that order.
+    The leading flag (0 = has a timestamp, 1 = none) keeps undated items at the bottom
+    regardless of the empty string sorting first; within dated items the ISO timestamp
+    sorts ascending so the nearest date/time comes first.
     """
-    return activity.timestamp or ""
+    ts = activity.timestamp or ""
+    return (0, ts) if ts else (1, "")
 
 
 def from_tasks() -> list[Activity]:
@@ -200,7 +202,7 @@ def unified(days: int = 14) -> list[Activity]:
     activities.extend(from_calendar(days))
     activities.extend(from_messages())
     activities.extend(from_files(days))
-    activities.sort(key=_sort_key, reverse=True)
+    activities.sort(key=_sort_key)
     return activities
 
 

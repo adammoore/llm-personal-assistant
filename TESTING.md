@@ -3,6 +3,19 @@
 How to exercise every surface and judge whether it's actually helping. Run from the repo
 root: `cd /Users/adamvialsmoore/llm-personal-assistant`.
 
+## One command (start here)
+
+```bash
+python3 tests/smoke.py
+```
+
+Exercises the whole system safely — task store + schema, capture, focus (incl. `--energy`),
+the unified activity stream (asserts soonest-first), the dashboard build, all prompt banks,
+read-only calendar/inbox/OneDrive plumbing, and script syntax. **Nothing is sent, and task
+writes go to a temp store — your real data and phone are untouched.** Prints `N passed, M
+failed` and exits non-zero on any failure. The phone/Signal/visual bits it can't judge are
+below.
+
 ## Desktop — the core, all working now
 
 | Test | Command | Expect |
