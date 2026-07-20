@@ -40,8 +40,10 @@ costs nothing, and nothing here is framed as a backlog or a debt.
    he wants to drop one, that is a legitimate, healthy outcome — treat it as tidying, not failure.
 
 5. **Ask ONE action-learning question** (skippable). Draw a single question from
-   `extracted/action_learning_questions.json` — one only, never a batch. It's an offer with a
-   zero-consequence skip; do not push if he passes.
+   `extracted/action_learning_questions.json` — one only, never a batch. If a warmer angle
+   fits the month, you may instead offer a single `self_care` or `breakdown` prompt from
+   `extracted/reflection_prompts.json`. It's an offer with a zero-consequence skip; do not
+   push if he passes.
 
 6. **Record what he gives** (only what he gives):
    - Write the goals review into the `## Goals review` section of `data/monthly/<YYYY-MM>.md`.

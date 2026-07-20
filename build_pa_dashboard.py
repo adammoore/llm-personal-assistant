@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
@@ -119,6 +120,34 @@ def _messages_section() -> str:
             + "".join(blocks) + "</section>")
 
 
+# Short glyphs so the unified stream reads at a glance without a legend.
+_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢"}
+
+
+def _activity_section(days: int = 14) -> str:
+    """A compact unified timeline across tasks, calendar, mail, and work files.
+
+    Additive read-only view — the practical seed of the "associative trails" idea:
+    everything the PA knows about on one plane, newest/soonest-first. Reuses the same
+    .group/.sub/.rows/.row/.when/.what classes as the other sections.
+    """
+    stream = unified(days=days)
+    if not stream:
+        return ""
+    rows = []
+    # Cap the timeline so the glance stays calm rather than exhaustive.
+    for a in stream[:14]:
+        glyph = _ACTIVITY_GLYPH.get(a.source, "·")
+        when = html.escape((a.timestamp or "")[:16])
+        rows.append(
+            f'<li class="row"><span class="when">{when}</span>'
+            f'<span class="what">{glyph} {html.escape(a.title[:64])}</span></li>'
+        )
+    return ('<section class="group"><h2>Recent activity'
+            '<span class="count">all sources</span></h2>'
+            f'<ul class="rows">{"".join(rows)}</ul></section>')
+
+
 def _render_html(tasks: list[dict], today: date) -> str:
     """Assemble the full self-contained dashboard document."""
     open_tasks = [t for t in tasks if not t.get("completed")]
@@ -168,6 +197,7 @@ def _render_html(tasks: list[dict], today: date) -> str:
                       f'<span class="count">{len(open_tasks)}</span></h2></section>'
                       if open_tasks else ""),
         open_body=open_body,
+        activity_body=_activity_section(),
     )
 
 
@@ -258,6 +288,7 @@ _PAGE = """<!doctype html>
   {messages_body}
   {tasks_header}
   {open_body}
+  {activity_body}
   <footer>Your central overview · CIDER is your focus space · generated locally, private</footer>
 </main>
 </body>

@@ -33,7 +33,9 @@ nothing.
 
 3. **Invite intentions.** Ask once, gently, for up to three things Adam wants to point at
    today. Offer a daily prompt from `extracted/prompt_bank.json` (a `daily` one) if it helps.
-   **One question, skippable, zero consequence.** Do not push if he skips.
+   If getting started feels like the sticky part, you may instead offer a single
+   `activation` prompt from `extracted/reflection_prompts.json`. **One question either way,
+   skippable, zero consequence.** Do not push if he skips.
 
 4. **Record what he gives** (only what he gives):
    - Write the intentions into the `## Top 3 intentions` section of `data/daily/<date>.md`.

@@ -4,6 +4,17 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Salvage from prior repos (4 items, built in parallel):**
+  - *Energy + breakdown*: task store gains `energy` (low/med/high), `estimate_min`, and
+    `steps`; `task-capture` gets `--energy/--estimate/--step`; `focus` shows effort + first
+    step and adds `--energy low` quick-wins filter. (from llm-pa / llm-pa-ver ADHD taxonomy)
+  - *Reflection prompt banks*: `extracted/reflection_prompts.json` — 36 PDA-aware prompts in
+    5 groups (activation/breakdown/self_care/reflection/reframe), woven one-per-session into
+    the check-ins. (salvaged from llm-pa-ver coaching prompts)
+  - *Unified Activity model*: `lib/activity.py` normalizes tasks/calendar/mail/files into one
+    stream; dashboard gains an additive "Recent activity" timeline — the seed of the ZigZag
+    associative-trails idea. (from idea-tracker-mcp-dashboard Activity Hub)
+  - document_vault reviewed and skipped (unrelated dead-man's-switch mailer).
 - **Focus (theme + priority)**: task store gains `theme` (free project tag) and `priority`
   (high/normal/low); `task-capture` accepts `--theme`/`--priority`. New `focus` skill
   (`skills/focus/focus.py`) renders one theme's tasks + related dates/messages and can push a

@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from lib.applenotes import append_to_pa_note  # noqa: E402
 from lib.taskstore import (  # noqa: E402
-    CATEGORIES, DEFAULT_CATEGORY, DEFAULT_PRIORITY, PRIORITIES, add_task,
+    CATEGORIES, DEFAULT_CATEGORY, DEFAULT_ENERGY, DEFAULT_PRIORITY, ENERGIES,
+    PRIORITIES, add_task,
 )
 
 
@@ -34,6 +35,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--theme", default=None,
                    help="project/theme tag for focus (e.g. Enact, Case, House)")
     p.add_argument("--priority", default=DEFAULT_PRIORITY, choices=PRIORITIES)
+    p.add_argument("--energy", default=DEFAULT_ENERGY, choices=ENERGIES,
+                   help="energy the task demands (match it to the tank, not the guilt)")
+    p.add_argument("--estimate", default=None, type=int, metavar="MIN",
+                   help="rough size in minutes (optional)")
+    p.add_argument("--step", action="append", default=None, dest="steps", metavar="STEP",
+                   help="a first concrete step (repeatable) to lower activation energy")
     p.add_argument("--due", default=None, help="due date, ISO YYYY-MM-DD")
     p.add_argument("--description", default=None, help="optional extra detail")
     p.add_argument("--source", default="chat", help="where the task came from (chat/signal)")
@@ -50,6 +57,10 @@ def _notes_line(task: dict) -> str:
     line = f"☐ {flag}{task['title']} [{task['category']}]"
     if task.get("theme"):
         line += f" #{task['theme']}"
+    # Compact energy/estimate read so the inbox line hints at the effort, not just the what.
+    line += f" ·{task.get('energy', 'medium')}"
+    if task.get("estimate_min"):
+        line += f" ({task['estimate_min']} min)"
     if task.get("due_date"):
         line += f" — due {task['due_date']}"
     return line
@@ -63,6 +74,9 @@ def main(argv: list[str]) -> int:
         category=args.category,
         theme=args.theme,
         priority=args.priority,
+        energy=args.energy,
+        estimate_min=args.estimate,
+        steps=args.steps,
         due=args.due,
         description=args.description,
         source=args.source,

@@ -36,7 +36,9 @@ part costs nothing, and undone work is never itemised as debt.
    session, never a batch. Frame it as an offer he can take, defer, or skip with zero
    consequence (PDA-aware). If a `weekly` prompt from `extracted/prompt_bank.json` fits the
    week better (deadlines, procrastination, self-care, dependencies), you may offer that
-   instead — but still only one, still skippable.
+   instead. A single `reflection` or `reframe` prompt from
+   `extracted/reflection_prompts.json` is also fair game if a gentler step-back fits — but
+   still only one, still skippable.
 
 4. **Record what he gives** (only what he gives):
    - Write his answer into the `## Reflection` section of `data/weekly/<YYYY-Www>.md`.

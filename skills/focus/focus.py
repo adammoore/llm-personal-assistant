@@ -33,9 +33,13 @@ from lib.taskstore import load_tasks, priority_rank, repo_root  # noqa: E402
 HORIZON_DAYS = 21
 
 
-def _match_task(t: dict, theme: str | None, priority: str | None) -> bool:
-    """A task is in focus if its theme matches (or the title mentions it) and priority fits."""
+def _match_task(t: dict, theme: str | None, priority: str | None,
+                energy: str | None = None) -> bool:
+    """A task is in focus if theme matches (or the title mentions it) and priority/energy fit."""
     if priority and t.get("priority") != priority:
+        return False
+    # Energy filter surfaces quick wins that fit the tank (e.g. `--energy low`) across themes.
+    if energy and t.get("energy", "medium") != energy:
         return False
     if not theme:
         return True
@@ -43,10 +47,11 @@ def _match_task(t: dict, theme: str | None, priority: str | None) -> bool:
     return (t.get("theme") or "").lower() == tl or tl in t["title"].lower()
 
 
-def gather(theme: str | None, priority: str | None, today: date) -> dict:
+def gather(theme: str | None, priority: str | None, today: date,
+           energy: str | None = None) -> dict:
     """Collect focused tasks, related dates, and related messages."""
     tasks = [t for t in load_tasks()
-             if not t.get("completed") and _match_task(t, theme, priority)]
+             if not t.get("completed") and _match_task(t, theme, priority, energy)]
     tasks.sort(key=lambda t: (priority_rank(t), t.get("due_date") or "9999", t["id"]))
 
     # Dates/messages have no theme field, so match on the theme keyword (skip if none).
@@ -66,24 +71,46 @@ def gather(theme: str | None, priority: str | None, today: date) -> dict:
     return {"tasks": tasks, "dates": dates, "messages": messages}
 
 
-def _label(theme: str | None, priority: str | None) -> str:
-    if theme and priority:
-        return f"{theme} · {priority} priority"
+def _effort(t: dict) -> str:
+    """Compact energy/estimate read for a task, e.g. ' ·low (10 min)'."""
+    out = f" ·{t.get('energy', 'medium')}"
+    if t.get("estimate_min"):
+        out += f" ({t['estimate_min']} min)"
+    return out
+
+
+def _first_step(t: dict) -> str | None:
+    """The first concrete step, if any — the smallest possible start to lower activation energy."""
+    steps = t.get("steps") or []
+    return steps[0] if steps else None
+
+
+def _label(theme: str | None, priority: str | None, energy: str | None = None) -> str:
+    bits = []
     if theme:
-        return theme
-    return f"{priority} priority" if priority else "everything"
+        bits.append(theme)
+    if priority:
+        bits.append(f"{priority} priority")
+    if energy:
+        bits.append(f"{energy} energy")
+    return " · ".join(bits) if bits else "everything"
 
 
-def render_markdown(data: dict, theme: str | None, priority: str | None, today: date) -> str:
+def render_markdown(data: dict, theme: str | None, priority: str | None, today: date,
+                    energy: str | None = None) -> str:
     """Human-readable focused view."""
-    lines = [f"# Focus — {_label(theme, priority)}", f"_{today.strftime('%A %-d %B %Y')}_", ""]
+    lines = [f"# Focus — {_label(theme, priority, energy)}",
+             f"_{today.strftime('%A %-d %B %Y')}_", ""]
     lines.append(f"## Tasks ({len(data['tasks'])})")
     if not data["tasks"]:
         lines.append("_None — nothing on this right now._")
     for t in data["tasks"]:
         flag = "‼ " if t.get("priority") == "high" else ""
         due = f" — due {t['due_date']}" if t.get("due_date") else ""
-        lines.append(f"- {flag}#{t['id']} {t['title']} [{t['category']}]{due}")
+        lines.append(f"- {flag}#{t['id']} {t['title']} [{t['category']}]{_effort(t)}{due}")
+        step = _first_step(t)
+        if step:
+            lines.append(f"    ▸ start: {step}")
     if theme:
         lines.append(f"\n## Related dates ({len(data['dates'])})")
         for e in data["dates"] or []:
@@ -101,15 +128,19 @@ def render_markdown(data: dict, theme: str | None, priority: str | None, today: 
     return "\n".join(lines) + "\n"
 
 
-def _note_html(data: dict, theme: str | None, priority: str | None, today: date) -> str:
+def _note_html(data: dict, theme: str | None, priority: str | None, today: date,
+               energy: str | None = None) -> str:
     esc = html.escape
-    p = [f"<div><b>Focus — {esc(_label(theme, priority))}</b></div>",
+    p = [f"<div><b>Focus — {esc(_label(theme, priority, energy))}</b></div>",
          f"<div>{esc(today.strftime('%A %-d %B %Y'))}</div><div><br></div>"]
     p.append(f"<div><b>Tasks ({len(data['tasks'])})</b></div>")
     for t in data["tasks"] or []:
         flag = "‼ " if t.get("priority") == "high" else ""
         due = f" — due {esc(t['due_date'])}" if t.get("due_date") else ""
-        p.append(f"<div>&nbsp;&nbsp;☐ {flag}{esc(t['title'])}{due}</div>")
+        p.append(f"<div>&nbsp;&nbsp;☐ {flag}{esc(t['title'])}{esc(_effort(t))}{due}</div>")
+        step = _first_step(t)
+        if step:
+            p.append(f"<div>&nbsp;&nbsp;&nbsp;&nbsp;▸ start: {esc(step)}</div>")
     if not data["tasks"]:
         p.append("<div>&nbsp;&nbsp;Nothing on this right now.</div>")
     if theme:
@@ -122,17 +153,21 @@ def _note_html(data: dict, theme: str | None, priority: str | None, today: date)
     return "".join(p)
 
 
-def _signal_summary(data: dict, theme: str | None, priority: str | None) -> str:
+def _signal_summary(data: dict, theme: str | None, priority: str | None,
+                    energy: str | None = None) -> str:
     highs = sum(1 for t in data["tasks"] if t.get("priority") == "high")
     top = data["tasks"][0]["title"] if data["tasks"] else "nothing queued"
     extra = f", {highs} high" if highs else ""
-    return f"🎯 Focus: {_label(theme, priority)} — {len(data['tasks'])} task(s){extra}. Next: {top}."
+    label = _label(theme, priority, energy)
+    return f"🎯 Focus: {label} — {len(data['tasks'])} task(s){extra}. Next: {top}."
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="A single-theme/priority focus view.")
     p.add_argument("theme", nargs="?", default=None, help="theme/project to focus on")
     p.add_argument("--priority", default=None, choices=["high", "normal", "low"])
+    p.add_argument("--energy", default=None, choices=["low", "medium", "high"],
+                   help="surface only tasks needing this energy (e.g. low = quick wins)")
     p.add_argument("--push-note", action="store_true", help="write a synced 'Focus' Apple Note")
     p.add_argument("--signal", action="store_true", help="send a short Signal summary")
     p.add_argument("--date", default=None, help="ISO date (default today)")
@@ -141,21 +176,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    if not args.theme and not args.priority:
-        print("focus: give a theme (e.g. 'Enact') or --priority high", file=sys.stderr)
+    if not args.theme and not args.priority and not args.energy:
+        print("focus: give a theme (e.g. 'Enact'), --priority high, or --energy low",
+              file=sys.stderr)
         return 2
     today = date.fromisoformat(args.date) if args.date else date.today()
-    data = gather(args.theme, args.priority, today)
-    print(render_markdown(data, args.theme, args.priority, today))
+    data = gather(args.theme, args.priority, today, args.energy)
+    print(render_markdown(data, args.theme, args.priority, today, args.energy))
 
     if args.push_note:
-        ok = set_note(f"Focus — {_label(args.theme, args.priority)}",
-                      _note_html(data, args.theme, args.priority, today))
+        ok = set_note(f"Focus — {_label(args.theme, args.priority, args.energy)}",
+                      _note_html(data, args.theme, args.priority, today, args.energy))
         print(f"_(Focus note pushed: {ok})_")
     if args.signal:
         nudge = repo_root() / "schedule" / "nudge.sh"
-        subprocess.run(["bash", str(nudge), _signal_summary(data, args.theme, args.priority)],
-                       check=False)
+        summary = _signal_summary(data, args.theme, args.priority, args.energy)
+        subprocess.run(["bash", str(nudge), summary], check=False)
     return 0
 
 

@@ -9,7 +9,8 @@ Store (ADR-001 §2, git-ignored/private):
   - data/tasks.json  — canonical JSON array (machines read/write this)
   - data/tasks.md    — auto-generated human mirror (never hand-edit)
 
-Each task: {id, title, description, category, due_date, completed, created_at, source}
+Each task: {id, title, description, category, theme, priority, due_date, completed,
+created_at, source, energy, estimate_min, steps}
 """
 
 from __future__ import annotations
@@ -27,6 +28,12 @@ DEFAULT_CATEGORY = "Other"
 PRIORITIES = ["high", "normal", "low"]
 DEFAULT_PRIORITY = "normal"
 _PRIORITY_RANK = {"high": 0, "normal": 1, "low": 2}
+
+# Energy = how much fuel a task demands, not how urgent it is. Kept separate from priority
+# so a low-energy quick win can be surfaced on a flat day without touching what matters most
+# (salvaged from Adam's earlier ADHD PAs — "match the task to the tank, not the guilt").
+ENERGIES = ["low", "medium", "high"]
+DEFAULT_ENERGY = "medium"
 
 
 def repo_root() -> Path:
@@ -95,6 +102,9 @@ def add_task(
     source: str = "chat",
     theme: str | None = None,
     priority: str = DEFAULT_PRIORITY,
+    energy: str = DEFAULT_ENERGY,
+    estimate_min: int | None = None,
+    steps: list[str] | None = None,
     json_path: Path | None = None,
     md_path: Path | None = None,
     now: datetime | None = None,
@@ -110,9 +120,13 @@ def add_task(
     if priority not in PRIORITIES:
         print(f"error: priority must be one of {PRIORITIES}", file=sys.stderr)
         raise SystemExit(2)
+    if energy not in ENERGIES:
+        print(f"error: energy must be one of {ENERGIES}", file=sys.stderr)
+        raise SystemExit(2)
 
     tasks = load_tasks(json_path)
     created_at = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    # Keep the original field order intact; the ENERGY/BREAKDOWN dimensions append at the end.
     task = {
         "id": next_id(tasks),
         "title": title,
@@ -124,6 +138,10 @@ def add_task(
         "completed": False,
         "created_at": created_at,
         "source": source,
+        "energy": energy,
+        "estimate_min": estimate_min,
+        # First concrete steps, kept short to lower activation energy (nothing to plan, just start).
+        "steps": [s.strip() for s in (steps or []) if s.strip()],
     }
     tasks.append(task)
     save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
@@ -176,6 +194,13 @@ def _task_line(t: dict) -> str:
     parts = [f"- [{box}] {flag}#{t['id']} {t['title']}"]
     if t.get("theme"):
         parts.append(f"#{t['theme']}")
+    # Energy is always present (defaulted); estimate and steps only show when set — a
+    # compact "·low (10 min) ▸ 2 steps" so the tank/effort read is glanceable, not noisy.
+    parts.append(f"·{t.get('energy', DEFAULT_ENERGY)}")
+    if t.get("estimate_min"):
+        parts.append(f"({t['estimate_min']} min)")
+    if t.get("steps"):
+        parts.append(f"▸ {len(t['steps'])} steps")
     if t.get("due_date"):
         parts.append(f"— due {t['due_date']}")
     if t.get("description"):

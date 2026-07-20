@@ -1,0 +1,53 @@
+{
+  "_source": "adammoore/llm-pa-ver services/gemini_service.py (adhd_context, analyze_task_for_adhd, generate_daily_schedule, provide_adhd_coaching) + app/api/gemini/{analyze,coaching,schedule}/route.ts; framings cross-checked against adammoore/llm-pa backend/modules/prompt_system.py",
+  "_extracted": "2026-07-20 Phase 0 salvage",
+  "_note": "Short reflection/coaching PROMPTS salvaged from Adam's two prior PA repos and reworded as invitations (PDA-aware: no guilt, no demands, always skippable). These COMPLEMENT the two existing banks: prompt_bank.json holds cadence-keyed initiation prompts, action_learning_questions.json holds the 19-item 'Twenty Questions' deep-reflection set. This file adds ADHD-coaching framings the others lack: getting started, splitting work down, self-compassion, and reframing. Usage: offer ONE prompt per check-in, never a batch. Daily → activation; weekly → reflection/reframe; monthly → self_care/breakdown. Nothing here is a diagnostic label; these are gentle openers only.",
+  "groups": {
+    "activation": [
+      "What's the smallest first move here — the one that takes under two minutes?",
+      "If you started for just five minutes and could stop after, what would you touch first?",
+      "What would make starting feel ten percent easier right now?",
+      "Is there a low-energy version of this you could do instead?",
+      "What could you set up now so future-you finds it easier to begin?",
+      "Would a short timed burst help — focus for a bit, then free to stop?",
+      "What's pulling your attention away, and can any of it wait?",
+      "What's one part of this you could start without deciding the whole thing?"
+    ],
+    "breakdown": [
+      "If this were three smaller steps, what would the first one be?",
+      "What's the part you already know how to do?",
+      "Which piece feels heaviest — could it be split again?",
+      "What could you hand off, delay, or drop entirely?",
+      "What does 'done enough' look like for today?",
+      "Which step unlocks the others if you do it first?",
+      "What's the one thing that, if handled, would make the rest lighter?"
+    ],
+    "self_care": [
+      "Where's your energy right now — and what would actually match it?",
+      "What have you managed to eat or drink today?",
+      "When did you last take a real break?",
+      "What would rest genuinely look like tonight?",
+      "What's one kind thing you could do for yourself today?",
+      "Are you running low on anything — sleep, food, quiet, company?",
+      "What would you say to a friend who'd had the day you've had?"
+    ],
+    "reflection": [
+      "What went a little better than you expected?",
+      "What's one thing, however small, you're glad you did?",
+      "What drained you today, and what filled you back up?",
+      "What did you notice about how you work best?",
+      "What's worth carrying into tomorrow — and what can you set down?",
+      "Where did you show up, even when it was hard?",
+      "What's one loose thread you'd like to pick back up — no pressure if not?"
+    ],
+    "reframe": [
+      "Is this a 'won't' or a 'can't right now'? Both are okay.",
+      "What changes if progress, not perfection, is the goal?",
+      "Your brain works its own way — what does it actually need here?",
+      "What's the story you're telling about this, and is it the only one?",
+      "What's genuinely in your control right now?",
+      "If this feels hard because it matters, which part matters most?",
+      "What would 'good enough' free you up to do next?"
+    ]
+  }
+}
