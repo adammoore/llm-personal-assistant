@@ -23,6 +23,11 @@ from pathlib import Path
 CATEGORIES = ["Work", "Personal", "Health", "Finance", "Other"]
 DEFAULT_CATEGORY = "Other"
 
+# Priority for focus/sorting; theme is a free project tag (e.g. "Enact", "Case", "House").
+PRIORITIES = ["high", "normal", "low"]
+DEFAULT_PRIORITY = "normal"
+_PRIORITY_RANK = {"high": 0, "normal": 1, "low": 2}
+
 
 def repo_root() -> Path:
     """Repo root is one level up from this file (lib/taskstore.py)."""
@@ -88,6 +93,8 @@ def add_task(
     due: str | None = None,
     description: str | None = None,
     source: str = "chat",
+    theme: str | None = None,
+    priority: str = DEFAULT_PRIORITY,
     json_path: Path | None = None,
     md_path: Path | None = None,
     now: datetime | None = None,
@@ -100,6 +107,9 @@ def add_task(
     if category not in CATEGORIES:
         print(f"error: category must be one of {CATEGORIES}", file=sys.stderr)
         raise SystemExit(2)
+    if priority not in PRIORITIES:
+        print(f"error: priority must be one of {PRIORITIES}", file=sys.stderr)
+        raise SystemExit(2)
 
     tasks = load_tasks(json_path)
     created_at = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
@@ -108,6 +118,8 @@ def add_task(
         "title": title,
         "description": description or None,
         "category": category,
+        "theme": (theme or None),
+        "priority": priority,
         "due_date": due,
         "completed": False,
         "created_at": created_at,
@@ -160,10 +172,18 @@ def render_markdown(tasks: list[dict], *, now: datetime | None = None) -> str:
 def _task_line(t: dict) -> str:
     """One markdown checklist line for a task."""
     box = "x" if t.get("completed") else " "
-    parts = [f"- [{box}] #{t['id']} {t['title']}"]
+    flag = "‼ " if t.get("priority") == "high" else ""
+    parts = [f"- [{box}] {flag}#{t['id']} {t['title']}"]
+    if t.get("theme"):
+        parts.append(f"#{t['theme']}")
     if t.get("due_date"):
         parts.append(f"— due {t['due_date']}")
     if t.get("description"):
         parts.append(f"— {t['description']}")
     suffix = f"  · _{t.get('source', 'chat')}_"
     return " ".join(parts) + suffix
+
+
+def priority_rank(task: dict) -> int:
+    """Sort key: high→0, normal→1, low→2 (unknown treated as normal)."""
+    return _PRIORITY_RANK.get(task.get("priority", DEFAULT_PRIORITY), 1)

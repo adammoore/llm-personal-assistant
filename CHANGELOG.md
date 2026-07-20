@@ -4,6 +4,10 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Focus (theme + priority)**: task store gains `theme` (free project tag) and `priority`
+  (high/normal/low); `task-capture` accepts `--theme`/`--priority`. New `focus` skill
+  (`skills/focus/focus.py`) renders one theme's tasks + related dates/messages and can push a
+  synced `Focus` Apple Note + Signal summary — the deep-focus complement to the overview.
 
 - **Signal nudges → phone: LIVE** (2026-07-20). signal-cli 0.14.6 (ARM) linked; a launch
   agent (`com.adamvialsmoore.signal-cli-daemon`, RunAtLoad+KeepAlive) serves the JSON-RPC

@@ -22,13 +22,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from lib.applenotes import append_to_pa_note  # noqa: E402
-from lib.taskstore import CATEGORIES, DEFAULT_CATEGORY, add_task  # noqa: E402
+from lib.taskstore import (  # noqa: E402
+    CATEGORIES, DEFAULT_CATEGORY, DEFAULT_PRIORITY, PRIORITIES, add_task,
+)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Capture a task into the local store.")
     p.add_argument("title", help="the task, in plain words")
     p.add_argument("--category", default=DEFAULT_CATEGORY, choices=CATEGORIES)
+    p.add_argument("--theme", default=None,
+                   help="project/theme tag for focus (e.g. Enact, Case, House)")
+    p.add_argument("--priority", default=DEFAULT_PRIORITY, choices=PRIORITIES)
     p.add_argument("--due", default=None, help="due date, ISO YYYY-MM-DD")
     p.add_argument("--description", default=None, help="optional extra detail")
     p.add_argument("--source", default="chat", help="where the task came from (chat/signal)")
@@ -41,7 +46,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def _notes_line(task: dict) -> str:
     """One-line rendering of a task for the PA Inbox note."""
-    line = f"☐ {task['title']} [{task['category']}]"
+    flag = "‼ " if task.get("priority") == "high" else ""
+    line = f"☐ {flag}{task['title']} [{task['category']}]"
+    if task.get("theme"):
+        line += f" #{task['theme']}"
     if task.get("due_date"):
         line += f" — due {task['due_date']}"
     return line
@@ -53,6 +61,8 @@ def main(argv: list[str]) -> int:
     task = add_task(
         args.title,
         category=args.category,
+        theme=args.theme,
+        priority=args.priority,
         due=args.due,
         description=args.description,
         source=args.source,
