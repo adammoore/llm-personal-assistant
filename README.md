@@ -20,6 +20,18 @@ no bespoke OAuth.
 - **Nudges** — Signal invitations + calendar reminders at cadence boundaries, each
   skippable in one tap.
 
+## Quick start
+
+No server to start — everything runs through Claude Code. From this directory:
+
+- **Capture a task:** `python3 skills/task-capture/capture.py "Call the dentist"`
+- **Look at today:** run `/checkin-daily` in a Claude session (or `python3 skills/checkin-daily/glance.py` for just the glance)
+- **See your dashboard:** `python3 build_pa_dashboard.py` → open `data/PA_DASHBOARD.html`
+- **More:** `/comms-triage` · `/checkin-weekly` · `/checkin-monthly` · `/quarterly-review`
+
+Scheduled nudges (daily 07:30, weekly Mon 08:00, monthly 1st 09:00) run automatically once
+installed — see [`schedule/README.md`](schedule/README.md).
+
 ## Layout
 
 | Path | What |

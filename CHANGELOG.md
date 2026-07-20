@@ -3,7 +3,16 @@
 All notable changes to this project. Successor to the legacy `updates.txt` habit.
 Format loosely follows Keep a Changelog; dates are absolute.
 
-## [Unreleased] — agent-native overhaul
+## [2.0.0] — agent-native overhaul (2026-07-20)
+
+**Migration summary.** The 2024 FastAPI + React + SQLite app is retired and rebuilt as a set
+of Claude Code skills over adam-local / `gog` / `himalaya` / Granola / Signal — no web server,
+no database, no bespoke OAuth. Task store is local markdown/JSON; the PA renders its own
+dashboard (separate from CIDER); check-ins run on launchd with skippable Signal nudges;
+autonomy is governed by `autonomy.yaml`. The legacy app is preserved in `legacy/` and at the
+`v1-legacy` tag / `archive/2024-fastapi-react` branch. History was rewritten to purge
+committed secrets + a vendored `node_modules` (force-pushed). Full detail by phase below.
+
 
 ### Phase 0 — Audit & repo hygiene (2026-07-19)
 - Full-history secret scan (gitleaks): 6 hits — Anthropic API key + Google OAuth
@@ -73,3 +82,14 @@ Format loosely follows Keep a Changelog; dates are absolute.
 - `schedule/README.md` + `nudge.env.example`. DRY_RUN pipeline verified end-to-end (prep ran,
   note refreshed, nudge no-op'd — nothing sent, nothing installed).
 - Calendar-reminder channel documented (recurring events, confirm-required) — created on OK.
+- Installed: all three launchd jobs loaded in ~/Library/LaunchAgents; daily job test-fired
+  via launchctl (exit 0). Nudges remain no-op until `nudge.env` is wired.
+
+### Phase 4 — Decommission (2026-07-20)
+- Verified + pushed `v1-legacy` tag and `archive/2024-fastapi-react` branch (legacy app
+  preserved secret-clean).
+- Legacy 2024 app relocated to `legacy/` on `main` (per ADR-001; `npm install` regenerates
+  the removed `node_modules`).
+- README rewritten: what the system is now, a one-command quick start, and the migration
+  note pointing at the legacy tag.
+- This release header is the final migration summary. **Overhaul complete.**
