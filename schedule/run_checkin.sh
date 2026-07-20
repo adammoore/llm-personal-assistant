@@ -52,6 +52,15 @@ else
   log "prep failed (${PREP}) — sending invitation anyway"
 fi
 
+# Daily also refreshes the phone-synced "PA Today" Apple Note (passive glance on the phone).
+if [[ "${CADENCE}" == "daily" ]]; then
+  if python3 "${REPO}/skills/checkin-daily/push_today.py" >>"${LOG}" 2>&1; then
+    log "PA Today note refreshed"
+  else
+    log "PA Today refresh failed (non-fatal)"
+  fi
+fi
+
 # Send (or, in DRY_RUN, just log) the skippable invitation.
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   log "DRY_RUN — would nudge: ${INVITE}"

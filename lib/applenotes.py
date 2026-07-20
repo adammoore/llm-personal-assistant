@@ -59,6 +59,36 @@ def append_to_pa_note(line: str, *, note: str = PA_NOTE) -> bool:
     return ok
 
 
+# Replace a note's whole body (create if absent). Used for the regenerated "PA Today" glance.
+_SET = """
+on run argv
+  set t to item 1 of argv
+  set b to item 2 of argv
+  tell application "Notes"
+    tell account "%(account)s"
+      if not (exists note t of folder "%(folder)s") then
+        make new note at folder "%(folder)s" with properties {name:t, body:b}
+      else
+        set body of note t of folder "%(folder)s" to b
+      end if
+      return "ok"
+    end tell
+  end tell
+end run
+"""
+
+
+def set_note(title: str, body_html: str) -> bool:
+    """Replace a note's body with body_html (create if absent). Returns success.
+
+    body_html should begin with a bold title line, since Notes derives the note's title
+    from the first content line.
+    """
+    script = _SET % {"account": ACCOUNT, "folder": FOLDER}
+    ok, _ = _osascript(script, title, body_html)
+    return ok
+
+
 _LIST_TITLES = 'tell application "Notes" to get name of notes'
 
 
