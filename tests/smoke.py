@@ -111,14 +111,15 @@ def _t_activity():
     assert dated == sorted(dated), "activity stream is not soonest-first"
 
 
-@check("dashboard: builds and contains all sections")
+@check("dashboard: builds with the command-deck cards + capture form")
 def _t_dashboard():
     r = run(["python3", "build_pa_dashboard.py"])
     assert r.returncode == 0, r.stderr
-    htmlfile = REPO / "data" / "PA_DASHBOARD.html"
-    body = htmlfile.read_text(encoding="utf-8")
-    for h in ("Upcoming", "Needs a look", "Tasks", "Recent activity"):
-        assert h in body, f"missing section: {h}"
+    body = (REPO / "data" / "PA_DASHBOARD.html").read_text(encoding="utf-8")
+    for token in ('class="deck"', 'class="capture"', 'data-key="today"',
+                  'data-key="tasks"', 'data-key="messages"', 'data-key="activity"',
+                  'action="/complete"'):
+        assert token in body, f"missing: {token}"
 
 
 # --- extracted assets ---------------------------------------------------------
