@@ -161,6 +161,43 @@ def complete_task(task_id: int, *, json_path: Path | None = None,
     return None
 
 
+_EDITABLE = {"title", "category", "theme", "priority", "energy", "due_date", "description"}
+
+
+def update_task(task_id: int, fields: dict, *, json_path: Path | None = None,
+                md_path: Path | None = None, now: datetime | None = None) -> dict | None:
+    """Edit a task's fields (title/category/theme/priority/energy/due_date/description).
+
+    Only whitelisted keys apply. For theme/due_date/description an empty value clears the
+    field; an empty title is ignored. Invalid category/priority/energy are dropped. Returns
+    the updated task, or None if not found.
+    """
+    tasks = load_tasks(json_path)
+    for t in tasks:
+        if int(t.get("id", -1)) != int(task_id):
+            continue
+        for k, v in fields.items():
+            if k not in _EDITABLE:
+                continue
+            v = v.strip() if isinstance(v, str) else v
+            if k == "title":
+                if v:
+                    t[k] = v
+            elif k == "category" and v not in CATEGORIES:
+                continue
+            elif k == "priority" and v not in PRIORITIES:
+                continue
+            elif k == "energy" and v not in ENERGIES:
+                continue
+            elif k in ("theme", "due_date", "description"):
+                t[k] = v or None
+            else:
+                t[k] = v
+        save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
+        return t
+    return None
+
+
 def set_steps(task_id: int, steps: list[str], *, json_path: Path | None = None,
               md_path: Path | None = None, now: datetime | None = None) -> dict | None:
     """Replace a task's breakdown steps (Magic ToDo) and persist. Returns it, or None."""

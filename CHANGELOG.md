@@ -4,6 +4,9 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+### Dashboard v2 (ADR-003) — in progress
+- **Task edit**: a ✎ per task opens an inline edit form (title/category/theme/priority/
+  energy/due) → `/edit` → `lib.taskstore.update_task`. Now ✎ edit · ✨ breakdown · ✓ done.
 - **Signal inbound FIXED (2026-07-21)**: a self-inflicted daemon conflict — my
   `com.adamvialsmoore.signal-cli-daemon` LaunchAgent held the signal-cli config lock, so
   OpenClaw's own Signal provider couldn't start and inbound silently died. Removed my daemon;

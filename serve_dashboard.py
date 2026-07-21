@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO))
 
 from lib.magictodo import breakdown  # noqa: E402
 from lib.taskstore import (  # noqa: E402
-    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, load_tasks, set_steps,
+    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, load_tasks, set_steps, update_task,
 )
 
 
@@ -85,6 +85,15 @@ class Handler(BaseHTTPRequestHandler):
                 tid = first("id")
                 if tid.isdigit():
                     complete_task(int(tid))
+                    _rebuild()
+            elif path == "/edit":
+                tid = first("id")
+                if tid.isdigit():
+                    update_task(int(tid), {
+                        "title": first("title"), "category": first("category"),
+                        "theme": first("theme"), "priority": first("priority"),
+                        "energy": first("energy"), "due_date": first("due"),
+                    })
                     _rebuild()
             elif path == "/breakdown":
                 tid = first("id")

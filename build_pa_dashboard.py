@@ -37,6 +37,13 @@ def _esc(s: str) -> str:
     return html.escape(str(s))
 
 
+def _sel(name: str, options: list[str], current: str | None) -> str:
+    """A <select> with `current` pre-selected."""
+    opts = "".join(f'<option{" selected" if o == current else ""}>{_esc(o)}</option>'
+                   for o in options)
+    return f'<select name="{name}">{opts}</select>'
+
+
 def _due_state(due: str | None, today: date) -> str:
     if not due:
         return "none"
@@ -95,10 +102,21 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
             if steps:
                 steps_html = ('<ol class="steps">'
                               + "".join(f"<li>{_esc(s)}</li>" for s in steps) + "</ol>")
+            edit_form = (
+                f'<form class="edit" method="post" action="/edit" hidden>'
+                f'<input type="hidden" name="id" value="{t["id"]}">'
+                f'<input name="title" value="{_esc(t["title"])}">'
+                f'{_sel("category", CATEGORIES, t.get("category"))}'
+                f'<input name="theme" value="{_esc(t.get("theme") or "")}" placeholder="theme">'
+                f'{_sel("priority", ["high", "normal", "low"], t.get("priority"))}'
+                f'{_sel("energy", ["low", "medium", "high"], t.get("energy"))}'
+                f'<input name="due" value="{_esc(t.get("due_date") or "")}" placeholder="due YYYY-MM-DD">'
+                f'<button>Save</button></form>')
             rows.append(
                 f'<li class="task" data-state="{st}" style="--accent:{accent}">'
                 f'<div class="t-row"><span class="dot"></span>'
                 f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
+                f'<button type="button" class="edit-btn" title="edit">✎</button>'
                 f'<form class="mtd" method="post" action="/breakdown">'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
                 f'<input type="hidden" name="spice" class="spice-in" value="3">'
@@ -106,7 +124,7 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
                 f'<form class="done" method="post" action="/complete">'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
                 f'<button title="done">✓</button></form>'
-                f'</div>{steps_html}</li>')
+                f'</div>{edit_form}{steps_html}</li>')
         groups.append(f'<div class="sub">{_esc(category)}</div>'
                       f'<ul class="tasks">{"".join(rows)}</ul>')
     body = "".join(groups) or '<p class="empty">Clear slate. ✨</p>'
@@ -282,6 +300,14 @@ ol.steps li{ padding:.08rem 0; }
 .mtd button{ cursor:pointer; width:1.7rem; height:1.7rem; border-radius:50%;
   border:1px solid var(--line); background:transparent; line-height:1; }
 .mtd button:hover{ border-color:var(--accent); }
+.edit-btn{ cursor:pointer; flex:0 0 auto; width:1.7rem; height:1.7rem; border-radius:50%;
+  border:1px solid var(--line); background:transparent; color:var(--muted); line-height:1; }
+.edit-btn:hover{ color:var(--accent); border-color:var(--accent); }
+.edit{ display:flex; flex-wrap:wrap; gap:.35rem; margin:.4rem 0 .25rem 1.4rem; }
+.edit input,.edit select,.edit button{ padding:.3rem .5rem; border:1px solid var(--line);
+  border-radius:8px; background:var(--card); color:var(--ink); font-size:.82rem; }
+.edit input[name=title]{ flex:1 1 10rem; }
+.edit button{ cursor:pointer; color:var(--accent); border-color:var(--accent); font-weight:650; }
 .flag{ color:var(--overdue); font-weight:700; margin-right:.15rem; }
 .due{ font:.68rem/1 var(--mono); padding:.08rem .4rem; border:1px solid var(--line);
   border-radius:999px; color:var(--muted); margin-left:.2rem; }
@@ -342,6 +368,13 @@ _SCRIPT = """
         var c=document.querySelector('.card[data-key="'+act.slice(7)+'"]');
         if(c){ c.classList.remove('collapsed'); c.scrollIntoView({behavior:'smooth',block:'start'}); }
       }
+    });
+  });
+  // ✎ edit: toggle the inline edit form for a task.
+  document.querySelectorAll('.edit-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      var f=b.closest('.task').querySelector('.edit');
+      if(f) f.hidden=!f.hidden;
     });
   });
   // ✨ Magic ToDo: carry the chosen spiciness into each breakdown, show it's working.
