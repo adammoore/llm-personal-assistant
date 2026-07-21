@@ -4,6 +4,12 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Signal inbound FIXED (2026-07-21)**: a self-inflicted daemon conflict — my
+  `com.adamvialsmoore.signal-cli-daemon` LaunchAgent held the signal-cli config lock, so
+  OpenClaw's own Signal provider couldn't start and inbound silently died. Removed my daemon;
+  OpenClaw now owns signal-cli (send+receive). Added `~/.openclaw/workspace-anthropic/CLAUDE.md`
+  so the Signal agent operationalises todos (runs task-capture per item). Removed the misleading
+  daemon plist template; rewrote SIGNAL_SETUP.md.
 - **Magic ToDo (✨ breakdown)**: goblin.tools-style in the dashboard — a ✨ on each task
   breaks it into concrete steps via `claude -p` (the PA's own runtime, no API key), with a
   🌶 spiciness dial (1-5 = granularity). Steps save to the task (`lib/taskstore.set_steps`)

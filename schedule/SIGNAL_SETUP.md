@@ -1,40 +1,38 @@
-# Signal nudges — status: ✅ LIVE
+# Signal — status: ✅ LIVE (send + receive)
 
-Outbound Signal nudges reach Adam's phone. Confirmed 2026-07-20.
+Signal nudges reach Adam's phone, and inbound Signal messages are operationalised into tasks.
+
+## Architecture (important correction, 2026-07-21)
+
+**OpenClaw manages signal-cli itself.** Its Signal provider launches and owns the signal-cli
+JSON-RPC daemon on `127.0.0.1:8080` for both send and receive.
+
+> ⚠️ Do **not** run a separate signal-cli daemon (e.g. a `com.adamvialsmoore.signal-cli-daemon`
+> LaunchAgent). It grabs the account config lock, OpenClaw's own provider then can't start
+> (`Config file is in use by another instance`), and **inbound Signal silently dies** — only
+> outbound squeaks through. This exact conflict was found and removed on 2026-07-21.
 
 ## The working setup
 
 ```
-run_checkin.sh / nudge.sh
-   └─ NUDGE_CMD (schedule/nudge.env, git-ignored)
-        └─ openclaw message send --channel signal --target +44…
-             └─ OpenClaw gateway  →  signal-cli JSON-RPC API @ 127.0.0.1:8080
-                  └─ signal-cli 0.14.6 (linked device)  →  Signal  →  phone
+outbound:  run_checkin.sh / nudge.sh → NUDGE_CMD (schedule/nudge.env, git-ignored)
+             → openclaw message send --channel signal → OpenClaw's signal-cli daemon → phone
+inbound:   phone → Signal → OpenClaw signal provider → the bound "anthropic" agent
+             → (guided by ~/.openclaw/workspace-anthropic/CLAUDE.md) runs the PA skills
+             → captures todos into the task store, replies
 ```
 
-Components:
-- **signal-cli 0.14.6** (`/opt/homebrew/bin`, ARM) — linked as a secondary device to
-  +447712553049. (The earlier 409s were an old Intel 0.14.3 build + device contention;
-  resolved by reinstalling the ARM build and re-linking cleanly.)
-- **signal-cli daemon** on `127.0.0.1:8080` — kept alive by the launch agent
-  `com.adamvialsmoore.signal-cli-daemon` (RunAtLoad + KeepAlive). Template in
-  `schedule/launchagents/*.plist.example`; the number-filled copy lives only in
-  `~/Library/LaunchAgents`.
-- **OpenClaw** `channels.signal.enabled = true`, driving signal-cli.
-- **nudge.env** (`git-ignored`): `NUDGE_CMD='openclaw message send --channel signal --target +44… -m "$NUDGE_MESSAGE"'`.
+- **signal-cli 0.14.6** (ARM), linked device for `+447712553049`. OpenClaw starts the daemon.
+- **OpenClaw** `channels.signal.enabled = true`; agent `anthropic` bound to signal.
+- **Inbound behaviour** is defined in `~/.openclaw/workspace-anthropic/CLAUDE.md`: send a todo
+  → it runs `task-capture` per item and rebuilds the dashboard.
 
 ## Manage / verify
 
 ```bash
-launchctl list | grep signal-cli-daemon         # daemon running?
-lsof -iTCP:8080 -sTCP:LISTEN                     # :8080 served?
-bash schedule/nudge.sh "test — did this reach my phone?"
-tail -f /tmp/signal-cli-daemon.log              # daemon logs
+lsof -iTCP:8080 -sTCP:LISTEN                       # OpenClaw's signal-cli serving?
+tail -f ~/.openclaw/logs/gateway.log              # gateway + signal provider
+bash schedule/nudge.sh "test"                     # outbound
+# inbound: text yourself a todo on Signal → it should land in the dashboard tasks
+launchctl kickstart -k gui/$(id -u)/ai.openclaw.gateway   # restart if signal is stuck
 ```
-
-If the daemon stops serving :8080: `launchctl kickstart -k gui/$(id -u)/com.adamvialsmoore.signal-cli-daemon`.
-
-## Still to wire (two-way / inbound)
-
-Outbound is done. To reply *from* the phone and trigger skills ("today", "capture …"),
-bind an OpenClaw agent to this repo — see `ROADMAP.md` (iPhone two-way).
