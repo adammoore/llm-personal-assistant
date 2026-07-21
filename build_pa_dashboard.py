@@ -105,8 +105,12 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
             steps = t.get("steps") or []
             steps_html = ""
             if steps:
-                steps_html = ('<ol class="steps">'
-                              + "".join(f"<li>{_esc(s)}</li>" for s in steps) + "</ol>")
+                # Emphasise the FIRST step as the concrete next action (research: surface the
+                # next physical step, not the whole goal — lowers task-initiation friction).
+                items = "".join(
+                    f'<li class="next-step">{_esc(s)}</li>' if i == 0 else f"<li>{_esc(s)}</li>"
+                    for i, s in enumerate(steps))
+                steps_html = f'<ol class="steps">{items}</ol>'
             edit_form = (
                 f'<form class="edit" method="post" action="/edit" hidden>'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
@@ -271,7 +275,10 @@ def _render_html(today: date) -> str:
         "<title>Personal Assistant</title>"
         f"<style>{_STYLE}</style></head><body><main>"
         f'<header class="top"><div class="date">{_esc(today.strftime("%A %-d %B %Y"))}'
-        f'{wins}</div></header>'
+        f'{wins}</div>'
+        '<div class="prefs"><button id="theme-btn" title="cycle theme">◐ theme</button>'
+        '<button id="fs-dn" title="smaller text">A−</button>'
+        '<button id="fs-up" title="larger text">A+</button></div></header>'
         f'<div class="deck">{deck}</div>'
         # Two refresh affordances: rebuild the page from current data, or pull the work tabs.
         '<div class="ctl">'
@@ -301,15 +308,24 @@ def _render_html(today: date) -> str:
 
 
 _STYLE = """
-:root{ --bg:#f4f6f8; --card:#fff; --ink:#19212b; --muted:#6b7480; --line:#e4e8ec;
-  --accent:#0f766e; --overdue:#b4472e; --today:#0f766e;
+:root{ --bg:#f4f6f8; --card:#fff; --ink:#19212b; --muted:#66707c; --line:#e4e8ec;
+  --accent:#0f766e; --overdue:#a1553c; --today:#0f766e;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace; }
-@media (prefers-color-scheme:dark){ :root{ --bg:#0e1116; --card:#161b22; --ink:#e6e9ee;
-  --muted:#8994a2; --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a; --today:#2dd4bf; } }
+/* Auto dark (unless the user has explicitly chosen light) */
+@media (prefers-color-scheme:dark){ :root:not([data-theme=light]){ --bg:#0e1116; --card:#161b22;
+  --ink:#e6e9ee; --muted:#8994a2; --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a;
+  --today:#2dd4bf; } }
+/* Explicit user overrides (persisted) — individual variation is large (see DESIGN.md) */
+:root[data-theme=dark]{ --bg:#0e1116; --card:#161b22; --ink:#e6e9ee; --muted:#8994a2;
+  --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a; --today:#2dd4bf; }
 *{ box-sizing:border-box; }
+/* Root font-size is user-adjustable; components use rem so all text scales together (≥16px). */
+html{ font-size:16.5px; }
 body{ margin:0; padding:1.4rem 1.1rem 3rem; background:var(--bg); color:var(--ink);
-  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  font-size:1rem; line-height:1.6;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 main{ max-width:1100px; margin:0 auto; }
+.top{ display:flex; align-items:center; gap:.6rem; }
 .top .date{ font:.72rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
   color:var(--muted); }
 .deck{ display:flex; flex-wrap:wrap; gap:.5rem; margin:.6rem 0 1rem; }
@@ -406,7 +422,13 @@ ol.steps li{ padding:.08rem 0; }
 .empty{ color:var(--muted); font-size:.88rem; padding:.4rem 0; }
 .empty.sm{ padding:.15rem 0; font-size:.82rem; }
 footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-top:1.5rem; }
-@media (prefers-reduced-motion:reduce){ .chev{ transition:none; } }
+/* No motion by default beyond a tiny chevron turn; honour reduced-motion fully. */
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; animation:none !important; } }
+.prefs{ display:flex; gap:.3rem; align-items:center; margin-left:auto; }
+.prefs button{ cursor:pointer; font:.72rem/1 var(--mono); padding:.25rem .5rem; border-radius:8px;
+  border:1px solid var(--line); background:transparent; color:var(--muted); }
+.prefs button:hover{ color:var(--accent); border-color:var(--accent); }
+.next-step{ color:var(--accent); font-weight:600; }
 """
 
 _SCRIPT = """
@@ -451,7 +473,9 @@ _SCRIPT = """
         filterTasks(st);
       } else if(act.indexOf('scroll:')===0){
         var c=document.querySelector('.card[data-key="'+act.slice(7)+'"]');
-        if(c){ c.classList.remove('collapsed'); c.scrollIntoView({behavior:'smooth',block:'start'}); }
+        if(c){ c.classList.remove('collapsed');
+          var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+          c.scrollIntoView({behavior: rm?'auto':'smooth', block:'start'}); }
       }
     });
   });
@@ -483,8 +507,36 @@ _SCRIPT = """
       var b=f.querySelector('button'); b.textContent='pulling…'; b.disabled=true;
     });
   });
-  // Refresh every 60s so monitor updates appear — but never while adding a task.
+  // Preferences (persisted): theme + text size. Individual variation is large (DESIGN.md).
+  var root=document.documentElement;
+  var savedTheme=localStorage.getItem('pa-theme');
+  if(savedTheme && savedTheme!=='auto') root.setAttribute('data-theme', savedTheme);
+  var savedFs=localStorage.getItem('pa-fs'); if(savedFs) root.style.fontSize=savedFs;
+  var tb=document.getElementById('theme-btn');
+  if(tb) tb.addEventListener('click', function(){
+    var order=['auto','light','dark'];
+    var cur=localStorage.getItem('pa-theme')||'auto';
+    var next=order[(order.indexOf(cur)+1)%3];
+    localStorage.setItem('pa-theme', next);
+    if(next==='auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', next);
+    tb.textContent='◐ '+next;
+  });
+  if(tb) tb.textContent='◐ '+(localStorage.getItem('pa-theme')||'auto');
+  function setFs(px){ px=Math.max(14, Math.min(22, px)); root.style.fontSize=px+'px';
+    localStorage.setItem('pa-fs', px+'px'); }
+  function curFs(){ return parseFloat(getComputedStyle(root).fontSize)||16.5; }
+  var up=document.getElementById('fs-up'), dn=document.getElementById('fs-dn');
+  if(up) up.addEventListener('click', function(){ setFs(curFs()+1); });
+  if(dn) dn.addEventListener('click', function(){ setFs(curFs()-1); });
+
+  // Refresh so monitor updates appear — but never yank the page while you're using it.
+  var lastActive=Date.now();
+  ['mousemove','keydown','scroll','click'].forEach(function(e){
+    document.addEventListener(e, function(){ lastActive=Date.now(); }, {passive:true});
+  });
   setInterval(function(){
+    if(document.hidden) return;                       // not looking — no point
+    if(Date.now()-lastActive < 45000) return;         // you're active — don't interrupt
     var a=document.activeElement;
     if(a && a.closest && a.closest('.capture')) return;
     location.reload();
