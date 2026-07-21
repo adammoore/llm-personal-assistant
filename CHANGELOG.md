@@ -4,6 +4,9 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Desktop surface**: `serve_dashboard.py` + `com.adamvialsmoore.pa-dashboard` launch
+  agent serve the dashboard at http://127.0.0.1:8787 (loopback only), auto-refreshing every
+  60s; the monitor keeps the HTML current. A real always-on desktop glance to keep open.
 - **Dynamic monitoring layer (ADR-002) — the constant companion:** `lib/state.py`
   (persistent state + dedup/rate-limit ledger) + `skills/monitor/monitor.py`, an always-on
   loop that watches mail/calendar/deadlines, reacts to genuinely new events (chatty, but

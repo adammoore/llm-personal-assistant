@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.adamvialsmoore.pa-dashboard.plist
+  ─────────────────────────────────────
+  Keeps the desktop dashboard surface at http://127.0.0.1:8787 (loopback only). Open that
+  URL and leave the tab; it auto-refreshes every 60s and the monitor keeps the HTML current.
+
+  INSTALL:
+    cp schedule/launchagents/com.adamvialsmoore.pa-dashboard.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.adamvialsmoore.pa-dashboard.plist
+  MANAGE:
+    Stop:  launchctl unload ~/Library/LaunchAgents/com.adamvialsmoore.pa-dashboard.plist
+    Logs:  tail -f /tmp/pa-dashboard.log
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adamvialsmoore.pa-dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/adamvialsmoore/llm-personal-assistant/serve_dashboard.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/adamvialsmoore/llm-personal-assistant</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/pa-dashboard.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pa-dashboard-error.log</string>
+</dict>
+</plist>
