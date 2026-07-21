@@ -12,8 +12,15 @@ Shape:
       "reminded_events": [event_keys],      # calendar events already reminded
       "deadline_notified": [task_ids],      # tasks already flagged due/overdue
       "nudge_ledger": {event_key: iso_ts},  # last time each event key was nudged (dedup)
+      "mail_nudges": {event_key: {...}},    # retraction handles for MAIL nudges (see below)
       "last_surface_refresh": iso_ts|None
     }
+
+`mail_nudges` lets the monitor *take back* a mail nudge once the email it pointed at is gone
+(archived/deleted). Each record carries the Signal message handle to remote-delete, plus the
+inbox coordinates used to notice the email disappeared:
+    event_key -> {msg_id, target, account, mail_id, subject, sent_at, retracted[, retracted_at]}
+`retracted` is a tombstone: once True we never retract that nudge again (idempotent).
 
 The ledger drives two guards (see ADR-002 anti-fatigue):
   - DEDUP: a stable event key is nudged once, ever.
@@ -25,6 +32,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# Bound the retraction ledger so it can't grow forever (oldest records dropped first).
+MAIL_NUDGE_CAP = 300
 
 
 def repo_root() -> Path:
@@ -42,6 +52,7 @@ def _blank() -> dict:
         "reminded_events": [],
         "deadline_notified": [],
         "nudge_ledger": {},
+        "mail_nudges": {},
         "last_surface_refresh": None,
     }
 
@@ -100,3 +111,46 @@ def rate_state(state: dict, now: datetime, *, min_gap_s: int = 30,
 def record_nudge(state: dict, event_key: str, now: datetime) -> None:
     """Mark an event key as nudged at `now`."""
     state.setdefault("nudge_ledger", {})[event_key] = now.isoformat(timespec="seconds")
+
+
+# --- mail-nudge retraction ledger --------------------------------------------------------
+# When the monitor nudges about a new email it also stashes the Signal message handle here,
+# so if that email is later archived/deleted the monitor can remote-delete the stale nudge.
+
+
+def record_mail_nudge(state: dict, event_key: str, *, msg_id: str, target: str | None,
+                      account: str, mail_id: str, subject: str, now: datetime) -> None:
+    """Remember the Signal handle for a mail nudge so it can be retracted later."""
+    nudges = state.setdefault("mail_nudges", {})
+    nudges[event_key] = {
+        "msg_id": msg_id,            # openclaw/signal message id to remote-delete
+        "target": target,           # recipient (E.164) the delete must be addressed to
+        "account": account,         # which inbox this email lives in (dedup by mail_id there)
+        "mail_id": mail_id,         # the himalaya envelope id we watch for disappearance
+        "subject": subject,         # kept for the follow-up-note fallback
+        "sent_at": now.isoformat(timespec="seconds"),
+        "retracted": False,
+    }
+    _prune_mail_nudges(nudges)
+
+
+def _prune_mail_nudges(nudges: dict) -> None:
+    """Keep at most MAIL_NUDGE_CAP records, dropping the oldest by sent_at first."""
+    if len(nudges) <= MAIL_NUDGE_CAP:
+        return
+    ordered = sorted(nudges.items(), key=lambda kv: kv[1].get("sent_at", ""))
+    for key, _ in ordered[: len(nudges) - MAIL_NUDGE_CAP]:
+        nudges.pop(key, None)
+
+
+def pending_mail_nudges(state: dict) -> dict:
+    """Mail nudges still live (not yet retracted) — candidates for retraction this cycle."""
+    return {k: v for k, v in state.get("mail_nudges", {}).items() if not v.get("retracted")}
+
+
+def mark_retracted(state: dict, event_key: str, now: datetime) -> None:
+    """Tombstone a mail nudge as retracted so it is never retracted twice (idempotent)."""
+    rec = state.get("mail_nudges", {}).get(event_key)
+    if rec is not None:
+        rec["retracted"] = True
+        rec["retracted_at"] = now.isoformat(timespec="seconds")

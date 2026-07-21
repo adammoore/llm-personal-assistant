@@ -16,6 +16,7 @@ Output: data/PA_DASHBOARD.html (git-ignored — private).
 from __future__ import annotations
 
 import html
+import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -31,7 +32,10 @@ CATEGORY_COLOR = {
     "Work": "#2E75B6", "Personal": "#7C5CBF", "Health": "#3FA796",
     "Finance": "#C08A2E", "Other": "#7A8290",
 }
-_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢"}
+_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢", "work": "◈"}
+
+# The work-pull cache (skills/work-pull/pull.py --cache) drives the Work (Westminster) card.
+_WORK_CACHE = Path(__file__).resolve().parent / "data" / "work_cache.json"
 
 
 def _esc(s: str) -> str:
@@ -179,6 +183,44 @@ def _activity_card() -> str:
                  collapsed=True)
 
 
+def _work_card() -> str:
+    """Work (Westminster) card from the work-pull cache — labels + snippets + freshness.
+
+    Defensive: no cache (never pulled) → a prompt; cache with up=false → a "launch Chrome"
+    note; up=true → each surface's label and a short snippet, plus a subtle "as of <at>".
+    """
+    try:
+        data = json.loads(_WORK_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+
+    if not data:
+        body = ('<p class="empty sm">No work snapshot yet — hit '
+                '<b>pull work</b> to read the Enact tabs.</p>')
+        return _card("work", "Work (Westminster)", "", body, collapsed=True)
+
+    at = _esc(data.get("at") or "")
+    if not data.get("up"):
+        note = data.get("note") or "Enact Chrome not running — launch it."
+        body = (f'<p class="empty sm">{_esc(note)}</p>'
+                + (f'<div class="sum-at">as of {at}</div>' if at else ""))
+        return _card("work", "Work (Westminster)", "", body, collapsed=True)
+
+    sources = [s for s in (data.get("sources") or []) if isinstance(s, dict)]
+    rows = []
+    for src in sources:
+        label = src.get("label") or "Work"
+        text = (src.get("text") or "").strip()
+        snippet = " ".join(text.split())[:120] if text else "(tab not open)"
+        rows.append(f'<div class="sub">{_esc(label)}</div>'
+                    f'<p class="work-snip">{_esc(snippet)}</p>')
+    body = ("".join(rows) or '<p class="empty sm">No surfaces read.</p>')
+    if at:
+        body += f'<div class="sum-at">as of {at}</div>'
+    count = str(sum(1 for s in sources if (s.get("text") or "").strip()))
+    return _card("work", "Work (Westminster)", count, body, collapsed=True)
+
+
 def _render_html(today: date) -> str:
     tasks = load_tasks()
     open_tasks = [t for t in tasks if not t.get("completed")]
@@ -220,7 +262,7 @@ def _render_html(today: date) -> str:
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
-             + _messages_card(worth_by_acct) + _activity_card())
+             + _messages_card(worth_by_acct) + _work_card() + _activity_card())
 
     return (
         "<!doctype html><html lang=\"en\"><head>"
@@ -231,6 +273,14 @@ def _render_html(today: date) -> str:
         f'<header class="top"><div class="date">{_esc(today.strftime("%A %-d %B %Y"))}'
         f'{wins}</div></header>'
         f'<div class="deck">{deck}</div>'
+        # Two refresh affordances: rebuild the page from current data, or pull the work tabs.
+        '<div class="ctl">'
+        '<form method="post" action="/refresh"><button class="ghost" title="rebuild now">'
+        '↻ refresh</button></form>'
+        '<form method="post" action="/pull-work" class="pull">'
+        '<button class="ghost" title="read the Enact work tabs (needs the Enact Chrome)">'
+        'pull work</button></form>'
+        '</div>'
         '<form class="capture" method="post" action="/capture">'
         '<input name="title" placeholder="Add a task…" autocomplete="off" autofocus>'
         '<input name="theme" placeholder="theme" autocomplete="off" class="theme">'
@@ -282,6 +332,14 @@ main{ max-width:1100px; margin:0 auto; }
 .capture button{ cursor:pointer; font-weight:650; border-color:var(--accent); color:var(--accent); }
 .capture .spice{ display:inline-flex; align-items:center; gap:.3rem; font-size:.82rem;
   color:var(--muted); }
+.ctl{ display:flex; gap:.45rem; margin:0 0 .8rem; }
+.ctl form{ margin:0; }
+.ctl .ghost{ cursor:pointer; font:.78rem/1 var(--mono); padding:.4rem .7rem; border-radius:10px;
+  border:1px solid var(--line); background:var(--card); color:var(--muted); letter-spacing:.04em; }
+.ctl .ghost:hover{ border-color:var(--accent); color:var(--accent); }
+.ctl .pull button:disabled{ opacity:.55; cursor:progress; }
+.work-snip{ margin:.15rem 0 .4rem; font-size:.84rem; color:var(--muted);
+  overflow:hidden; text-overflow:ellipsis; }
 .grid{ columns:330px; column-gap:14px; }
 .card{ break-inside:avoid; background:var(--card); border:1px solid var(--line);
   border-radius:14px; margin:0 0 14px; overflow:hidden; }
@@ -328,6 +386,7 @@ ol.steps li{ padding:.08rem 0; }
   border:1px solid var(--line); background:transparent; color:var(--muted); line-height:1; }
 .edit-btn:hover{ color:var(--accent); border-color:var(--accent); }
 .edit{ display:flex; flex-wrap:wrap; gap:.35rem; margin:.4rem 0 .25rem 1.4rem; }
+.edit[hidden]{ display:none; }
 .edit input,.edit select,.edit button{ padding:.3rem .5rem; border:1px solid var(--line);
   border-radius:8px; background:var(--card); color:var(--ink); font-size:.82rem; }
 .edit input[name=title]{ flex:1 1 10rem; }
@@ -416,6 +475,12 @@ _SCRIPT = """
       var sp=document.getElementById('spice');
       if(sp) f.querySelector('.spice-in').value=sp.value;
       var b=f.querySelector('button'); b.textContent='…'; b.disabled=true;
+    });
+  });
+  // "pull work" is slow (drives the Enact Chrome) — show it's working and block double-posts.
+  document.querySelectorAll('form.pull').forEach(function(f){
+    f.addEventListener('submit', function(){
+      var b=f.querySelector('button'); b.textContent='pulling…'; b.disabled=true;
     });
   });
   // Refresh every 60s so monitor updates appear — but never while adding a task.

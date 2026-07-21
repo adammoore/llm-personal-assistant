@@ -102,6 +102,18 @@ class Handler(BaseHTTPRequestHandler):
                         "energy": first("energy"), "due_date": first("due"),
                     })
                     _rebuild()
+            elif path == "/refresh":
+                # Rebuild the dashboard HTML from current data, then redirect back.
+                _rebuild()
+            elif path == "/pull-work":
+                # Read the open Enact work tabs into data/work_cache.json, then rebuild.
+                # Slow and needs the Enact Chrome; capture output and cap the runtime so a
+                # hung/absent browser can't wedge the request.
+                subprocess.run(
+                    ["python3", str(REPO / "skills" / "work-pull" / "pull.py"), "--cache"],
+                    check=False, capture_output=True, timeout=120,
+                )
+                _rebuild()
             elif path == "/summarize-mail":
                 summarize_inbox()
                 _rebuild()

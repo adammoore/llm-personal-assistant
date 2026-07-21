@@ -14,6 +14,7 @@ that fails or returns nothing simply contributes no activities, never an excepti
 
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -27,8 +28,12 @@ from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  #
 from lib.onedrive import recent_files  # noqa: E402
 from lib.taskstore import load_tasks  # noqa: E402
 
-# The four sources an Activity can originate from (kept as a tuple for cheap validation).
-SOURCES = ("task", "calendar", "mail", "file")
+# The sources an Activity can originate from (kept as a tuple for cheap validation).
+SOURCES = ("task", "calendar", "mail", "file", "work")
+
+# Compact snapshot of the Westminster/Enact work surfaces, written by skills/work-pull
+# (`pull.py --cache`). Read defensively — it may be absent, stale, or mark Chrome down.
+_WORK_CACHE = Path(__file__).resolve().parents[1] / "data" / "work_cache.json"
 
 
 @dataclass
@@ -191,8 +196,51 @@ def from_files(days: int = 14) -> list[Activity]:
     return activities
 
 
+# Map a work surface id onto the Activity source that best fits its glyph/filtering.
+_WORK_SOURCE = {"mail": "mail", "calendar": "calendar"}
+
+
+def from_work_cache(path: Path = _WORK_CACHE) -> list[Activity]:
+    """Westminster/Enact work surfaces (from the work-pull cache) as activities.
+
+    Defensive: a missing/unreadable/malformed cache, or one marking Chrome down, simply
+    yields nothing. Each surface with a snippet becomes one Activity anchored to the cache's
+    `at` timestamp, titled by its label plus a short snippet.
+    """
+    activities: list[Activity] = []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return activities
+    if not isinstance(data, dict) or not data.get("up"):
+        return activities
+    at = data.get("at") or None
+    for src in data.get("sources") or []:
+        if not isinstance(src, dict):
+            continue
+        text = (src.get("text") or "").strip()
+        if not text:
+            continue
+        label = src.get("label") or "Work"
+        # First line of the snippet, collapsed, as a glance.
+        snippet = " ".join(text.split())[:56]
+        activities.append(
+            Activity(
+                source=_WORK_SOURCE.get(src.get("id"), "work"),
+                type="work",
+                timestamp=at,
+                title=f"{label}: {snippet}" if snippet else label,
+                theme="Work",
+                priority=None,
+                url=None,
+                meta={"surface": src.get("id"), "cache_at": at},
+            )
+        )
+    return activities
+
+
 def unified(days: int = 14) -> list[Activity]:
-    """Merge all four sources into one stream, newest/soonest-first.
+    """Merge all sources into one stream, newest/soonest-first.
 
     Each builder is independently defensive, so one failing source never sinks the
     whole stream — it simply contributes nothing.
@@ -202,6 +250,7 @@ def unified(days: int = 14) -> list[Activity]:
     activities.extend(from_calendar(days))
     activities.extend(from_messages())
     activities.extend(from_files(days))
+    activities.extend(from_work_cache())
     activities.sort(key=_sort_key)
     return activities
 

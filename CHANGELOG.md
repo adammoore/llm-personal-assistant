@@ -5,6 +5,9 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 ### Dashboard v2 (ADR-003) — in progress
+- **Westminster in the view (③)**: `work-pull --cache` → `data/work_cache.json`; a **Work (Westminster)** card + **↻ refresh** and **pull work** buttons; work items join the unified activity stream (`lib/activity.from_work_cache`). `/refresh` + `/pull-work` routes.
+- **Retract stale nudges (④)**: the monitor records each mail nudge's Signal message id; when that email is later archived/deleted it **remote-deletes the nudge** (`openclaw message delete` → signal-cli `remoteDelete`), with a follow-up-note fallback. Dedup untouched; dry-safe; `mail_nudges` ledger in state (capped, tombstoned).
+- **Fix**: edit forms were showing open — `.edit[hidden]` now respected.
 - **Task delete**: a 🗑 per task soft-deletes (reversible — `deleted`/`deleted_at`, stays in the store, hidden from every view via `load_tasks(include_deleted=False)`). `/delete` route + `lib.taskstore.delete_task`. Now ✎ edit · ✨ breakdown · ✓ done · 🗑 delete.
 - **Messages: expand + auto-summary**: "+N more" reveals the full per-account list (client
   side); a "✨ summarise" button runs `lib/mailsummary.py` (claude -p over the noise-filtered

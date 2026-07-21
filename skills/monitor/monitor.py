@@ -18,6 +18,8 @@ First run seeds state silently (records what already exists without nudging).
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import subprocess
 import sys
 import time
@@ -28,7 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.state import (  # noqa: E402
-    already_nudged, load_state, rate_state, record_nudge, repo_root, save_state,
+    already_nudged, load_state, mark_retracted, pending_mail_nudges, rate_state,
+    record_mail_nudge, record_nudge, repo_root, save_state,
 )
 from lib.taskstore import load_tasks  # noqa: E402
 
@@ -38,20 +41,36 @@ SURFACE_REFRESH_MIN = 15   # re-render dashboard + PA Today at most this often
 MIN_GAP_S = 30             # min seconds between nudges
 HOURLY_CAP = 20            # per-hour nudge cap before coalescing
 COALESCE_ABOVE = 3         # >this many fresh events in one cycle -> one summary nudge
+MAX_RETRACT_PER_CYCLE = 5  # cap stale-nudge retractions per pass (belt-and-braces vs. surges)
+
+# nudge.sh prints "✅ Sent via Signal. Message ID: <id>" — this pulls the <id> back out so we
+# can remote-delete that exact message if the email it flagged later disappears.
+_MSG_ID_RE = re.compile(r"Message ID:\s*(\S+)")
 
 
 # --- watchers: each returns list of {"key","text"} and updates state's seen-sets ----------
 
-def watch_mail(state: dict) -> list[dict]:
-    """New worth-a-look messages since last seen, per account."""
+def watch_mail(state: dict, present: dict | None = None) -> list[dict]:
+    """New worth-a-look messages since last seen, per account.
+
+    If `present` is given it is filled with {account_id: {all current inbox ids}} — the
+    retraction step uses it to notice when a previously-nudged email has vanished.
+    """
     events, seen = [], state.setdefault("seen_mail", {})
     for acct in ACCOUNTS:
-        worth, _ = partition_inbox(fetch_inbox(acct["mail"]))
+        inbox = fetch_inbox(acct["mail"])
+        worth, _ = partition_inbox(inbox)
+        if present is not None:
+            # Every id currently in the inbox (not just worth-a-look ones): an email that is
+            # merely read still shows here, so it won't be mistaken for archived/deleted.
+            present[acct["id"]] = {m["id"] for m in inbox if m["id"]}
         known = set(seen.get(acct["id"], []))
         for m in worth:
             if m["id"] and m["id"] not in known:
                 events.append({"key": f"mail:{acct['id']}:{m['id']}",
-                               "text": f"✉ {m['from']}: {m['subject'][:70]} ({acct['id']})"})
+                               "text": f"✉ {m['from']}: {m['subject'][:70]} ({acct['id']})",
+                               "account": acct["id"], "mail_id": m["id"],
+                               "subject": m["subject"]})
         # Track current worth-a-look ids (cap the memory so it can't grow unbounded).
         seen[acct["id"]] = [m["id"] for m in worth][:200]
     return events
@@ -100,11 +119,97 @@ def watch_deadlines(state: dict, now: datetime) -> list[dict]:
 
 # --- reaction ----------------------------------------------------------------------------
 
-def _send(text: str) -> None:
-    """Fire one nudge through the existing (dedup-agnostic) Signal path."""
+def _send(text: str) -> str | None:
+    """Fire one nudge through the existing (dedup-agnostic) Signal path.
+
+    Returns the sent message's id (parsed from nudge.sh stdout) so a mail nudge can later be
+    retracted, or None if nothing usable came back (unconfigured no-op, send failure, etc.).
+    """
     nudge = repo_root() / "schedule" / "nudge.sh"
-    subprocess.run(["bash", str(nudge), text], check=False,
-                   capture_output=True, text=True, timeout=30)
+    try:
+        proc = subprocess.run(["bash", str(nudge), text], check=False,
+                              capture_output=True, text=True, timeout=30)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    m = _MSG_ID_RE.search(proc.stdout or "")
+    msg_id = m.group(1) if m else None
+    # "unknown" is what the backend prints for a dry/unconfigured send — not retractable.
+    return msg_id if msg_id and msg_id != "unknown" else None
+
+
+def _signal_target() -> str | None:
+    """Resolve the Signal recipient a retraction must be addressed to.
+
+    nudge.sh owns the actual send config; we only need the target for `openclaw message
+    delete`. Prefer an explicit env override, else scrape it out of schedule/nudge.env.
+    """
+    for var in ("MONITOR_SIGNAL_TARGET", "SIGNAL_TO"):
+        val = os.environ.get(var)
+        if val and val.strip():
+            return val.strip()
+    try:
+        text = (repo_root() / "schedule" / "nudge.env").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for pat in (r"--target\s+(\+?\d+)", r"SIGNAL_TO=['\"]?(\+?\d+)"):
+        m = re.search(pat, text)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _retract(rec: dict) -> bool:
+    """Best-effort retract one stale mail nudge. Never raises.
+
+    Primary path is a genuine remote delete: `openclaw message delete` maps onto signal-cli's
+    `remoteDelete`, so the nudge actually vanishes from Adam's phone. If that handle is missing
+    or the delete doesn't take, we fall back to ONE short follow-up note so he at least knows
+    the item is handled (a note can't unsend, hence it is the fallback, not the default).
+    """
+    target, msg_id = rec.get("target"), rec.get("msg_id")
+    if target and msg_id:
+        try:
+            proc = subprocess.run(
+                ["openclaw", "message", "delete", "--channel", "signal",
+                 "--target", target, "--message-id", msg_id],
+                check=False, capture_output=True, text=True, timeout=30)
+            if proc.returncode == 0:
+                return True
+        except (subprocess.SubprocessError, OSError):
+            pass  # fall through to the note
+    subj = (rec.get("subject") or "that email").strip()[:60]
+    _send(f"↩︎ earlier: '{subj}' is handled — no action needed.")
+    return True
+
+
+def retract_stale(state: dict, present: dict, now: datetime, *, dry: bool) -> list[str]:
+    """Retract mail nudges whose email has disappeared from its inbox since we flagged it.
+
+    "Gone" = the nudged envelope id is no longer among the account's current inbox ids
+    (archived/deleted/moved). We only judge an account whose fetch returned something this
+    cycle: an empty/failed himalaya read looks identical to an emptied inbox, so skipping it
+    avoids mass-retracting on a transient blip (documented limitation).
+    """
+    retracted: list[str] = []
+    for key, rec in pending_mail_nudges(state).items():
+        if len(retracted) >= MAX_RETRACT_PER_CYCLE:
+            break
+        current = present.get(rec.get("account"))
+        if not current:                       # not fetched / empty / failed -> don't judge
+            continue
+        if rec.get("mail_id") in current:     # still in the inbox -> leave the nudge be
+            continue
+        if dry:                               # report intent only; never touch Signal/state
+            retracted.append(key)
+            continue
+        try:
+            _retract(rec)
+        except Exception as exc:  # noqa: BLE001 — one bad retraction must not kill the loop
+            print(f"    retract error (non-fatal) {key}: {exc}", file=sys.stderr)
+        # Tombstone regardless of outcome so we never hammer a message we can't remove.
+        mark_retracted(state, key, now)
+        retracted.append(key)
+    return retracted
 
 
 def react(state: dict, events: list[dict], now: datetime, *, dry: bool) -> list[str]:
@@ -125,9 +230,17 @@ def react(state: dict, events: list[dict], now: datetime, *, dry: bool) -> list[
             record_nudge(state, e["key"], now)
     else:
         for e in fresh:
+            msg_id = None
             if not dry:
-                _send(e["text"])
+                msg_id = _send(e["text"])
             record_nudge(state, e["key"], now)
+            # Capture a retraction handle for individually-sent MAIL nudges only. (Coalesced
+            # nudges cover many events in one message, so retracting on a single vanished
+            # email would be wrong — those are intentionally not tracked.)
+            if msg_id and e["key"].startswith("mail:"):
+                record_mail_nudge(state, e["key"], msg_id=msg_id, target=_signal_target(),
+                                  account=e.get("account", ""), mail_id=e.get("mail_id", ""),
+                                  subject=e.get("subject", ""), now=now)
             sent.append(e["text"])
     return sent
 
@@ -153,14 +266,18 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
 
 def cycle(state: dict, now: datetime, *, dry: bool) -> dict:
     """One monitor pass. Returns a small report for logging/tests."""
-    events = watch_mail(state) + watch_calendar(state, now) + watch_deadlines(state, now)
+    present: dict[str, set] = {}   # {account_id: current inbox ids} — feeds retraction
+    events = (watch_mail(state, present) + watch_calendar(state, now)
+              + watch_deadlines(state, now))
     # First run: seed silently so we don't nudge about everything that already exists.
     if not state.get("seeded"):
         state["seeded"] = True
         return {"seeded": True, "events": len(events), "sent": []}
     sent = react(state, events, now, dry=dry)
+    retracted = retract_stale(state, present, now, dry=dry)
     refreshed = _refresh_surfaces(state, now, dry=dry)
-    return {"seeded": False, "events": len(events), "sent": sent, "refreshed": refreshed}
+    return {"seeded": False, "events": len(events), "sent": sent,
+            "refreshed": refreshed, "retracted": retracted}
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -184,10 +301,13 @@ def main(argv: list[str]) -> int:
             if report.get("seeded"):
                 print(f"{stamp}  seeded ({report['events']} items recorded, no nudges)")
             else:
+                retracted = report.get("retracted", [])
                 print(f"{stamp}  events={report['events']} sent={len(report['sent'])}"
-                      f" refreshed={report.get('refreshed')}")
+                      f" retracted={len(retracted)} refreshed={report.get('refreshed')}")
                 for s in report["sent"]:
                     print(f"    → {s}")
+                for k in retracted:
+                    print(f"    ↩ retracted {k}")
         except Exception as exc:  # noqa: BLE001 — the loop must survive any single-cycle error
             print(f"{now.isoformat(timespec='seconds')}  cycle error (non-fatal): {exc}",
                   file=sys.stderr)
