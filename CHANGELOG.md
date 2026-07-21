@@ -4,6 +4,11 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Westminster / Enact work comms (on-demand)**: `lib/cdp.py` — a zero-dependency stdlib
+  Chrome DevTools Protocol client — reads the visible text of Adam's already-logged-in
+  dedicated Enact Chrome (remote-debug :9222). `skills/work-pull/` summarises Outlook
+  mail+calendar, Teams, and Slack (Notch8) with no credentials/scraping. Read-only, only the
+  4 work URLs, on-demand (a live browser can't be a daemon). Verified against live tabs.
 - **Interactive desktop dashboard**: the localhost surface is now additive + completion-
   reporting — a capture box (title/theme/energy/priority) and a per-task ✓ button. The
   loopback server handles `/capture` + `/complete` (Post/Redirect/Get), rebuilding the page.

@@ -26,9 +26,9 @@ by request after launch, and who does what.
 | **Signal nudges → phone** | openclaw message send → signal-cli daemon :8080 | ✅ LIVE (2026-07-20) | — (daemon launch agent installed) |
 | **iPhone two-way (inbound)** | `openclaw agents add/bind` → PA repo workspace | ⏳ after Signal | assistant, once Signal up |
 | **Work OneDrive / SharePoint** | official OneDrive.app sync → PA reads local files | ✅ reader built (metadata-only) | — (signed in, syncing) |
-| **Work Outlook (mail/cal)** | IMAP via himalaya, or ICS calendar publish, if tenant allows; else browser | 🔜 TBD | Adam: check what tenant permits |
-| **Work Teams** | sanctioned client / browser (fragile) | 🔜 later | TBD |
-| **Slack (notch8.slack.com)** | no MCP available — per-user token/app or browser automation | 🔜 TBD | Adam: create a Slack user token, or approve browser path |
+| **Work Outlook (mail/cal)** | CDP read of the logged-in Enact Chrome (`work-pull`) | ✅ on-demand | — |
+| **Work Teams + Slack (Notch8)** | CDP read of the Enact Chrome (`work-pull`) | ✅ on-demand | — |
+
 
 ## Sequence
 
