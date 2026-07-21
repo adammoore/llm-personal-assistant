@@ -40,7 +40,11 @@ def _due(day: date) -> list[dict]:
 def build_html(day: date) -> str:
     """Build the note body (HTML — Notes takes the first bold line as the title)."""
     esc = html.escape
-    parts = [f"<div><b>{NOTE_TITLE} — {day.strftime('%A %-d %B %Y')}</b></div>", "<div><br></div>"]
+    # First line must be exactly NOTE_TITLE — Apple Notes derives the note's *name* from it,
+    # so a stable first line means set_note() updates one note instead of creating a new one
+    # each refresh (the date goes on the second line).
+    parts = [f"<div><b>{esc(NOTE_TITLE)}</b></div>",
+             f"<div>{esc(day.strftime('%A %-d %B %Y'))}</div>", "<div><br></div>"]
 
     # Calendar, per account, kept separate.
     parts.append("<div><b>Today</b></div>")

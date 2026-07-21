@@ -91,7 +91,8 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
             flag = '<span class="flag">‼</span>' if t.get("priority") == "high" else ""
             eff = f'<span class="eff">{_esc(t.get("energy", "medium"))}</span>'
             rows.append(
-                f'<li class="task" style="--accent:{accent}"><span class="dot"></span>'
+                f'<li class="task" data-state="{st}" style="--accent:{accent}">'
+                f'<span class="dot"></span>'
                 f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
                 f'<form class="done" method="post" action="/complete">'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
@@ -159,17 +160,19 @@ def _render_html(today: date) -> str:
         when = w if d == today.isoformat() else f"{d[5:]} {w}"
         next_mtg = f"{when}  {t[:22]}"
 
+    # Each chip is actionable: task chips filter the Tasks card; the others jump to a card.
     stats = [
-        ("open", str(len(open_tasks)), False),
-        ("due today", str(due_today), due_today > 0),
-        ("overdue", str(overdue), overdue > 0),
-        ("new mail", str(new_mail), False),
+        ("open", str(len(open_tasks)), False, "filter:all"),
+        ("due today", str(due_today), due_today > 0, "filter:today"),
+        ("overdue", str(overdue), overdue > 0, "filter:overdue"),
+        ("new mail", str(new_mail), False, "scroll:messages"),
     ]
     deck = "".join(
-        f'<div class="stat{" alert" if alert else ""}"><span class="n">{_esc(n)}</span>'
-        f'<span class="l">{_esc(lbl)}</span></div>' for lbl, n, alert in stats)
-    deck += (f'<div class="stat next"><span class="n">{_esc(next_mtg)}</span>'
-             f'<span class="l">next</span></div>')
+        f'<button class="stat{" alert" if alert else ""}" data-act="{act}">'
+        f'<span class="n">{_esc(n)}</span><span class="l">{_esc(lbl)}</span></button>'
+        for lbl, n, alert, act in stats)
+    deck += (f'<button class="stat next" data-act="scroll:today">'
+             f'<span class="n">{_esc(next_mtg)}</span><span class="l">next</span></button>')
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
@@ -212,7 +215,10 @@ main{ max-width:1100px; margin:0 auto; }
   color:var(--muted); }
 .deck{ display:flex; flex-wrap:wrap; gap:.5rem; margin:.6rem 0 1rem; }
 .stat{ display:flex; flex-direction:column; gap:.2rem; padding:.5rem .8rem; min-width:5rem;
-  background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  background:var(--card); border:1px solid var(--line); border-radius:12px; cursor:pointer;
+  text-align:left; color:inherit; font:inherit; }
+.stat:hover{ border-color:var(--accent); }
+.stat.on{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
 .stat .n{ font:650 1.2rem/1 var(--mono); font-variant-numeric:tabular-nums; }
 .stat .l{ font:.6rem/1 var(--mono); letter-spacing:.09em; text-transform:uppercase;
   color:var(--muted); }
@@ -280,6 +286,39 @@ _SCRIPT = """
       c.classList.toggle('collapsed');
       state[k]=c.classList.contains('collapsed');
       localStorage.setItem(KEY, JSON.stringify(state));
+    });
+  });
+  // Actionable stat chips: task chips filter the Tasks card; others jump to a card.
+  function filterTasks(state){
+    var card=document.querySelector('.card[data-key="tasks"]');
+    if(!card) return;
+    card.classList.remove('collapsed');
+    card.querySelectorAll('.task').forEach(function(t){
+      t.style.display=(!state||t.dataset.state===state)?'':'none';
+    });
+    card.querySelectorAll('.sub').forEach(function(sub){
+      var ul=sub.nextElementSibling;
+      if(ul&&ul.classList.contains('tasks')){
+        var any=[].some.call(ul.querySelectorAll('.task'),function(t){return t.style.display!=='none';});
+        sub.style.display=any?'':'none';
+      }
+    });
+  }
+  var current='';
+  document.querySelectorAll('.stat[data-act]').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      var act=chip.dataset.act;
+      if(act.indexOf('filter:')===0){
+        var st=act.slice(7); if(st==='all') st='';
+        if(current===st) st='';               // click again to clear
+        current=st;
+        document.querySelectorAll('.stat').forEach(function(c){c.classList.remove('on');});
+        if(st) chip.classList.add('on');
+        filterTasks(st);
+      } else if(act.indexOf('scroll:')===0){
+        var c=document.querySelector('.card[data-key="'+act.slice(7)+'"]');
+        if(c){ c.classList.remove('collapsed'); c.scrollIntoView({behavior:'smooth',block:'start'}); }
+      }
     });
   });
   // Refresh every 60s so monitor updates appear — but never while adding a task.
