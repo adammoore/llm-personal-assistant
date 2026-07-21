@@ -17,16 +17,25 @@ import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 REPO = Path(__file__).resolve().parent
 DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
+sys.path.insert(0, str(REPO))
+
+from lib.taskstore import CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task  # noqa: E402
+
+
+def _rebuild() -> None:
+    """Regenerate the dashboard HTML (after a task change) so the next load is current."""
+    subprocess.run(["python3", str(REPO / "build_pa_dashboard.py")],
+                   check=False, capture_output=True, timeout=60)
 
 
 def _ensure_built() -> None:
     """Build the dashboard once if it does not exist yet (e.g. first run)."""
     if not DASHBOARD.exists():
-        subprocess.run(["python3", str(REPO / "build_pa_dashboard.py")],
-                       check=False, capture_output=True, timeout=60)
+        _rebuild()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -45,6 +54,41 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):  # noqa: N802
+        """Handle the dashboard's own forms: /capture (add) and /complete (mark done)."""
+        path = urlparse(self.path).path
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        params = parse_qs(self.rfile.read(length).decode("utf-8")) if length else {}
+
+        def first(key: str, default: str = "") -> str:
+            return (params.get(key, [default]) or [default])[0].strip()
+
+        try:
+            if path == "/capture":
+                title = first("title")
+                if title:
+                    cat = first("category", DEFAULT_CATEGORY)
+                    add_task(
+                        title,
+                        category=cat if cat in CATEGORIES else DEFAULT_CATEGORY,
+                        theme=first("theme") or None,
+                        priority=first("priority", "normal") or "normal",
+                        energy=first("energy", "medium") or "medium",
+                        source="dashboard",
+                    )
+                    _rebuild()
+            elif path == "/complete":
+                tid = first("id")
+                if tid.isdigit():
+                    complete_task(int(tid))
+                    _rebuild()
+        except Exception:  # noqa: BLE001 — a bad form post must not kill the server
+            pass
+        # Redirect back to the dashboard (Post/Redirect/Get).
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.end_headers()
 
     def log_message(self, *_args):  # keep the daemon log quiet
         return

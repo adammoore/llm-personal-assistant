@@ -148,6 +148,19 @@ def add_task(
     return task
 
 
+def complete_task(task_id: int, *, json_path: Path | None = None,
+                  md_path: Path | None = None, now: datetime | None = None) -> dict | None:
+    """Mark a task complete (records completed_at) and persist. Returns it, or None if absent."""
+    tasks = load_tasks(json_path)
+    for t in tasks:
+        if int(t.get("id", -1)) == int(task_id):
+            t["completed"] = True
+            t["completed_at"] = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+            save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
+            return t
+    return None
+
+
 def render_markdown(tasks: list[dict], *, now: datetime | None = None) -> str:
     """Render the store as a grouped, human-readable markdown document."""
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")

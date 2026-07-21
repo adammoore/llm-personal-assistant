@@ -4,6 +4,10 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Interactive desktop dashboard**: the localhost surface is now additive + completion-
+  reporting — a capture box (title/theme/energy/priority) and a per-task ✓ button. The
+  loopback server handles `/capture` + `/complete` (Post/Redirect/Get), rebuilding the page.
+  `lib.taskstore.complete_task` records `completed_at` (also closes the month-scoping gap).
 - **Desktop surface**: `serve_dashboard.py` + `com.adamvialsmoore.pa-dashboard` launch
   agent serve the dashboard at http://127.0.0.1:8787 (loopback only), auto-refreshing every
   60s; the monitor keeps the HTML current. A real always-on desktop glance to keep open.

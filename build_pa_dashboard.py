@@ -66,6 +66,9 @@ def _task_card(task: dict, today: date) -> str:
         f'<li class="task" style="--accent:{accent}">'
         f'<span class="cat-dot"></span>'
         f'<div class="body"><div class="title">{title}{due_html}</div>{desc_html}</div>'
+        f'<form class="done-form" method="post" action="/complete">'
+        f'<input type="hidden" name="id" value="{task["id"]}">'
+        f'<button title="mark done" aria-label="mark done">✓</button></form>'
         f'</li>'
     )
 
@@ -272,6 +275,17 @@ _PAGE = """<!doctype html>
     min-width:5.4rem; }}
   .what {{ flex:1 1 auto; }}
   .what.muted {{ color:var(--muted); }}
+  .capture {{ display:flex; gap:.5rem; margin:0 0 1.4rem; flex-wrap:wrap; }}
+  .capture input, .capture select, .capture button {{ padding:.5rem .7rem;
+    border:1px solid var(--line); border-radius:10px; background:var(--card);
+    color:var(--ink); font-size:.92rem; }}
+  .capture input[name=title] {{ flex:1 1 12rem; }}
+  .capture button {{ cursor:pointer; font-weight:650; }}
+  li.task {{ align-items:center; }}
+  .done-form {{ margin:0; flex:0 0 auto; }}
+  .done-form button {{ cursor:pointer; width:1.9rem; height:1.9rem; border-radius:50%;
+    border:1px solid var(--line); background:var(--card); color:var(--muted); line-height:1; }}
+  .done-form button:hover {{ color:var(--today); border-color:var(--today); }}
   .empty {{ color:var(--muted); text-align:center; padding:2rem 0; }}
   footer {{ color:var(--muted); font-size:.78rem; text-align:center; margin-top:2rem; }}
 </style>
@@ -285,6 +299,21 @@ _PAGE = """<!doctype html>
     {overdue_note}
     {wins}
   </header>
+  <form class="capture" method="post" action="/capture">
+    <input name="title" placeholder="Add a task…" autocomplete="off" autofocus>
+    <input name="theme" placeholder="theme" autocomplete="off" style="flex:0 0 7rem">
+    <select name="energy">
+      <option value="low">low</option>
+      <option value="medium" selected>medium</option>
+      <option value="high">high</option>
+    </select>
+    <select name="priority">
+      <option value="high">high</option>
+      <option value="normal" selected>normal</option>
+      <option value="low">low</option>
+    </select>
+    <button>Add</button>
+  </form>
   {upcoming_body}
   {messages_body}
   {tasks_header}

@@ -57,6 +57,18 @@ def _t_store():
         assert "Smoke task" in md and "low" in md, md
 
 
+@check("taskstore: complete_task marks done + records completed_at")
+def _t_complete():
+    from lib.taskstore import add_task, complete_task, load_tasks
+    with tempfile.TemporaryDirectory() as d:
+        store = Path(d) / "t.json"
+        md = store.with_suffix(".md")
+        t = add_task("finish me", json_path=store, md_path=md)
+        done = complete_task(t["id"], json_path=store, md_path=md)
+        assert done and done["completed"] is True and done.get("completed_at"), done
+        assert load_tasks(store)[0]["completed"] is True
+
+
 @check("capture CLI: writes task with new fields to a temp store")
 def _t_capture():
     with tempfile.TemporaryDirectory() as d:
