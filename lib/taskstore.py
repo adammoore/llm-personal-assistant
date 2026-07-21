@@ -161,6 +161,18 @@ def complete_task(task_id: int, *, json_path: Path | None = None,
     return None
 
 
+def set_steps(task_id: int, steps: list[str], *, json_path: Path | None = None,
+              md_path: Path | None = None, now: datetime | None = None) -> dict | None:
+    """Replace a task's breakdown steps (Magic ToDo) and persist. Returns it, or None."""
+    tasks = load_tasks(json_path)
+    for t in tasks:
+        if int(t.get("id", -1)) == int(task_id):
+            t["steps"] = [s.strip() for s in steps if s and s.strip()]
+            save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
+            return t
+    return None
+
+
 def render_markdown(tasks: list[dict], *, now: datetime | None = None) -> str:
     """Render the store as a grouped, human-readable markdown document."""
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")

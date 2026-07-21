@@ -23,7 +23,10 @@ REPO = Path(__file__).resolve().parent
 DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
 sys.path.insert(0, str(REPO))
 
-from lib.taskstore import CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task  # noqa: E402
+from lib.magictodo import breakdown  # noqa: E402
+from lib.taskstore import (  # noqa: E402
+    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, load_tasks, set_steps,
+)
 
 
 def _rebuild() -> None:
@@ -83,6 +86,17 @@ class Handler(BaseHTTPRequestHandler):
                 if tid.isdigit():
                     complete_task(int(tid))
                     _rebuild()
+            elif path == "/breakdown":
+                tid = first("id")
+                spice = first("spice", "3")
+                if tid.isdigit():
+                    match = [t for t in load_tasks() if t["id"] == int(tid)]
+                    if match:
+                        steps = breakdown(match[0]["title"],
+                                          int(spice) if spice.isdigit() else 3)
+                        if steps:
+                            set_steps(int(tid), steps)
+                        _rebuild()
         except Exception:  # noqa: BLE001 — a bad form post must not kill the server
             pass
         # Redirect back to the dashboard (Post/Redirect/Get).

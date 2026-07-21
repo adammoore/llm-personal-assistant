@@ -4,6 +4,10 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Magic ToDo (✨ breakdown)**: goblin.tools-style in the dashboard — a ✨ on each task
+  breaks it into concrete steps via `claude -p` (the PA's own runtime, no API key), with a
+  🌶 spiciness dial (1-5 = granularity). Steps save to the task (`lib/taskstore.set_steps`)
+  and render inline. `lib/magictodo.py` + `/breakdown` endpoint. Verified end-to-end.
 - **Dashboard redesign (command deck)**: replaced the long linear layout with an at-a-glance
   instrument panel — a monospace stat bar (open / due / overdue / new mail / next meeting),
   masonry cards (Today · Tasks · Messages · Activity) that **collapse** with state persisted in

@@ -69,6 +69,17 @@ def _t_complete():
         assert load_tasks(store)[0]["completed"] is True
 
 
+@check("taskstore: set_steps stores Magic ToDo breakdown")
+def _t_setsteps():
+    from lib.taskstore import add_task, load_tasks, set_steps
+    with tempfile.TemporaryDirectory() as d:
+        store = Path(d) / "t.json"
+        md = store.with_suffix(".md")
+        t = add_task("plan the thing", json_path=store, md_path=md)
+        set_steps(t["id"], ["step a", "step b", ""], json_path=store, md_path=md)
+        assert load_tasks(store)[0]["steps"] == ["step a", "step b"]
+
+
 @check("capture CLI: writes task with new fields to a temp store")
 def _t_capture():
     with tempfile.TemporaryDirectory() as d:

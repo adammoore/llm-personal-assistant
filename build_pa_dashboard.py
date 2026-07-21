@@ -90,13 +90,23 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
                 due = f'<span class="due due-{st}">{_esc(lbl)}</span>'
             flag = '<span class="flag">‼</span>' if t.get("priority") == "high" else ""
             eff = f'<span class="eff">{_esc(t.get("energy", "medium"))}</span>'
+            steps = t.get("steps") or []
+            steps_html = ""
+            if steps:
+                steps_html = ('<ol class="steps">'
+                              + "".join(f"<li>{_esc(s)}</li>" for s in steps) + "</ol>")
             rows.append(
                 f'<li class="task" data-state="{st}" style="--accent:{accent}">'
-                f'<span class="dot"></span>'
+                f'<div class="t-row"><span class="dot"></span>'
                 f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
+                f'<form class="mtd" method="post" action="/breakdown">'
+                f'<input type="hidden" name="id" value="{t["id"]}">'
+                f'<input type="hidden" name="spice" class="spice-in" value="3">'
+                f'<button title="break it down">✨</button></form>'
                 f'<form class="done" method="post" action="/complete">'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
-                f'<button title="done">✓</button></form></li>')
+                f'<button title="done">✓</button></form>'
+                f'</div>{steps_html}</li>')
         groups.append(f'<div class="sub">{_esc(category)}</div>'
                       f'<ul class="tasks">{"".join(rows)}</ul>')
     body = "".join(groups) or '<p class="empty">Clear slate. ✨</p>'
@@ -194,7 +204,12 @@ def _render_html(today: date) -> str:
         '<option value="medium" selected>med</option><option value="high">high</option></select>'
         '<select name="priority"><option value="high">high</option>'
         '<option value="normal" selected>normal</option><option value="low">low</option></select>'
-        '<button>Add</button></form>'
+        '<button>Add</button>'
+        '<label class="spice" title="✨ breakdown detail (goblin.tools spiciness)">🌶'
+        '<select id="spice"><option value="1">1</option><option value="2">2</option>'
+        '<option value="3" selected>3</option><option value="4">4</option>'
+        '<option value="5">5</option></select></label>'
+        '</form>'
         f'<div class="grid">{cards}</div>'
         '<footer>Central overview · CIDER is your focus space · private</footer>'
         f"</main><script>{_SCRIPT}</script></body></html>"
@@ -231,6 +246,8 @@ main{ max-width:1100px; margin:0 auto; }
 .capture input[name=title]{ flex:1 1 12rem; }
 .capture .theme{ flex:0 0 6.5rem; }
 .capture button{ cursor:pointer; font-weight:650; border-color:var(--accent); color:var(--accent); }
+.capture .spice{ display:inline-flex; align-items:center; gap:.3rem; font-size:.82rem;
+  color:var(--muted); }
 .grid{ columns:330px; column-gap:14px; }
 .card{ break-inside:avoid; background:var(--card); border:1px solid var(--line);
   border-radius:14px; margin:0 0 14px; overflow:hidden; }
@@ -254,11 +271,17 @@ main{ max-width:1100px; margin:0 auto; }
 .mk{ flex:0 0 auto; width:.8rem; color:var(--muted); line-height:1.5; }
 .what{ flex:1 1 auto; min-width:0; }
 .row.more{ color:var(--muted); font-size:.78rem; padding-left:1.35rem; }
-.task{ display:flex; align-items:center; gap:.55rem; padding:.3rem 0;
-  border-top:1px solid var(--line); font-size:.9rem; }
+.task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
+.t-row{ display:flex; align-items:center; gap:.55rem; }
 .dot{ flex:0 0 auto; width:8px; height:8px; border-radius:50%; background:var(--accent); }
 .t-body{ flex:1 1 auto; min-width:0; }
+ol.steps{ margin:.3rem 0 .25rem 1.6rem; padding:0; color:var(--muted); font-size:.82rem; }
+ol.steps li{ padding:.08rem 0; }
+.mtd{ margin:0; flex:0 0 auto; }
+.mtd button{ cursor:pointer; width:1.7rem; height:1.7rem; border-radius:50%;
+  border:1px solid var(--line); background:transparent; line-height:1; }
+.mtd button:hover{ border-color:var(--accent); }
 .flag{ color:var(--overdue); font-weight:700; margin-right:.15rem; }
 .due{ font:.68rem/1 var(--mono); padding:.08rem .4rem; border:1px solid var(--line);
   border-radius:999px; color:var(--muted); margin-left:.2rem; }
@@ -319,6 +342,14 @@ _SCRIPT = """
         var c=document.querySelector('.card[data-key="'+act.slice(7)+'"]');
         if(c){ c.classList.remove('collapsed'); c.scrollIntoView({behavior:'smooth',block:'start'}); }
       }
+    });
+  });
+  // ✨ Magic ToDo: carry the chosen spiciness into each breakdown, show it's working.
+  document.querySelectorAll('.mtd').forEach(function(f){
+    f.addEventListener('submit', function(){
+      var sp=document.getElementById('spice');
+      if(sp) f.querySelector('.spice-in').value=sp.value;
+      var b=f.querySelector('button'); b.textContent='…'; b.disabled=true;
     });
   });
   // Refresh every 60s so monitor updates appear — but never while adding a task.
