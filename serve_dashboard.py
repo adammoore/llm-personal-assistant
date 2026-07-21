@@ -24,6 +24,7 @@ DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
 sys.path.insert(0, str(REPO))
 
 from lib.magictodo import breakdown  # noqa: E402
+from lib.mailsummary import summarize as summarize_inbox  # noqa: E402
 from lib.taskstore import (  # noqa: E402
     CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, load_tasks, set_steps, update_task,
 )
@@ -95,6 +96,9 @@ class Handler(BaseHTTPRequestHandler):
                         "energy": first("energy"), "due_date": first("due"),
                     })
                     _rebuild()
+            elif path == "/summarize-mail":
+                summarize_inbox()
+                _rebuild()
             elif path == "/breakdown":
                 tid = first("id")
                 spice = first("spice", "3")

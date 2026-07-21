@@ -5,6 +5,14 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 ### Dashboard v2 (ADR-003) — in progress
+- **Messages: expand + auto-summary**: "+N more" reveals the full per-account list (client
+  side); a "✨ summarise" button runs `lib/mailsummary.py` (claude -p over the noise-filtered
+  shortlist) into an ADHD-friendly "who's waiting / time-sensitive" digest, cached to
+  `data/mail_summary.json` and shown with a timestamp. `/summarize-mail` route.
+- **Messages: expand + auto-summary**: "+N more" reveals the full per-account list (client
+  side); a "✨ summarise" button runs `lib/mailsummary.py` (claude -p over the noise-filtered
+  shortlist) into an ADHD-friendly "who's waiting / time-sensitive" digest, cached to
+  `data/mail_summary.json` and shown with a timestamp. `/summarize-mail` route.
 - **Task edit**: a ✎ per task opens an inline edit form (title/category/theme/priority/
   energy/due) → `/edit` → `lib.taskstore.update_task`. Now ✎ edit · ✨ breakdown · ✓ done.
 - **Signal inbound FIXED (2026-07-21)**: a self-inflicted daemon conflict — my

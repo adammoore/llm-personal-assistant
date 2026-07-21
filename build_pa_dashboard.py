@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
+from lib.mailsummary import load_summary  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
 CATEGORY_COLOR = {
@@ -131,6 +132,12 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
     return _card("tasks", "Tasks", str(len(open_tasks)) if open_tasks else "", body)
 
 
+def _msg_row(m: dict, hidden: bool = False) -> str:
+    cls = "row hx" if hidden else "row"
+    return (f'<li class="{cls}"><span class="mk">{"•" if m["unread"] else "◦"}</span>'
+            f'<span class="what"><b>{_esc(m["from"])}</b> {_esc(m["subject"][:52])}</span></li>')
+
+
 def _messages_card(worth_by_acct: dict) -> str:
     blocks, total = [], 0
     for acct in ACCOUNTS:
@@ -140,15 +147,21 @@ def _messages_card(worth_by_acct: dict) -> str:
             blocks.append(f'<div class="sub">{_esc(acct["id"])}</div>'
                           f'<p class="empty sm">nothing standing out ({noise} quiet)</p>')
             continue
-        rows = "".join(
-            f'<li class="row"><span class="mk">{"•" if m["unread"] else "◦"}</span>'
-            f'<span class="what"><b>{_esc(m["from"])}</b> {_esc(m["subject"][:52])}</span></li>'
-            for m in worth[:4])
-        extra = len(worth) - min(len(worth), 4)
-        more = f'<li class="row more">+{extra} more</li>' if extra > 0 else ""
+        vis = "".join(_msg_row(m) for m in worth[:4])
+        hid = "".join(_msg_row(m, hidden=True) for m in worth[4:])
+        more = (f'<li class="row more" role="button" data-n="{len(worth) - 4}">'
+                f'+{len(worth) - 4} more</li>') if len(worth) > 4 else ""
         blocks.append(f'<div class="sub">{_esc(acct["id"])}</div>'
-                      f'<ul class="rows">{rows}{more}</ul>')
-    return _card("messages", "Messages", str(total), "".join(blocks))
+                      f'<ul class="rows">{vis}{hid}{more}</ul>')
+    # Auto-summary: cached digest (if any) + a re-summarise button.
+    summary = load_summary()
+    sum_html = ""
+    if summary:
+        sum_html = (f'<div class="mail-sum">{_esc(summary["summary"])}'
+                    f'<div class="sum-at">as of {_esc(summary["at"])}</div></div>')
+    btn = ('<form class="sum-btn" method="post" action="/summarize-mail">'
+           '<button title="summarise the inbox">✨ summarise</button></form>')
+    return _card("messages", "Messages", str(total), btn + sum_html + "".join(blocks))
 
 
 def _activity_card() -> str:
@@ -288,7 +301,15 @@ main{ max-width:1100px; margin:0 auto; }
   font-variant-numeric:tabular-nums; }
 .mk{ flex:0 0 auto; width:.8rem; color:var(--muted); line-height:1.5; }
 .what{ flex:1 1 auto; min-width:0; }
-.row.more{ color:var(--muted); font-size:.78rem; padding-left:1.35rem; }
+.row.more{ color:var(--accent); font-size:.78rem; padding-left:1.35rem; cursor:pointer; }
+.rows .hx{ display:none; }
+.rows.open .hx{ display:flex; }
+.sum-btn{ margin:0 0 .5rem; }
+.sum-btn button{ cursor:pointer; font-size:.78rem; padding:.25rem .6rem; border-radius:8px;
+  border:1px solid var(--line); background:transparent; color:var(--accent); }
+.mail-sum{ white-space:pre-wrap; font-size:.85rem; background:var(--bg); border:1px solid var(--line);
+  border-radius:10px; padding:.5rem .65rem; margin:0 0 .6rem; }
+.sum-at{ color:var(--muted); font:.68rem/1 var(--mono); margin-top:.35rem; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -368,6 +389,13 @@ _SCRIPT = """
         var c=document.querySelector('.card[data-key="'+act.slice(7)+'"]');
         if(c){ c.classList.remove('collapsed'); c.scrollIntoView({behavior:'smooth',block:'start'}); }
       }
+    });
+  });
+  // "+N more" messages: reveal the hidden rows in that account's list.
+  document.querySelectorAll('.row.more').forEach(function(m){
+    m.addEventListener('click', function(){
+      var ul=m.closest('.rows'); ul.classList.toggle('open');
+      m.textContent = ul.classList.contains('open') ? 'less' : ('+'+m.dataset.n+' more');
     });
   });
   // ✎ edit: toggle the inline edit form for a task.
