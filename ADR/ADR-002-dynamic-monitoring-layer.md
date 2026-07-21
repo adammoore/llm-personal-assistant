@@ -51,10 +51,16 @@ This intentionally revises ADR-001's "no daemon" stance: reality already runs da
 
 ## Anti-fatigue (critical, since quiet hours = anytime)
 
-A companion that nags is worse than none. Even running 24/7:
-- **Dedup** — every event has a stable key; it is nudged **once**, ever (tracked in state).
-- **Rate-limit** — a minimum gap between nudges (default 90s) and a per-hour cap (default 6);
-  excess events **coalesce** into one "a few things need you" nudge.
+Adam chose **anytime + a bit chattier** — he'd rather be able to *ignore* a nudge than worry
+he's missing something. So the tuning favours notifying, and leans on **dedup** (not silence)
+to stay sane:
+- **Dedup (always on)** — every event has a stable key; the *same* thing is nudged **once,
+  ever**. This is what prevents nagging; it never suppresses a genuinely *new* thing.
+- **Light rate-limit** — min gap **30s**, per-hour cap **20**; only *above* the cap do events
+  coalesce into one "a few things need you" nudge. Deliberately generous.
+- **First-run seeding** — on first start the monitor records current state **without**
+  nudging, so it doesn't flood with everything that already exists; only genuinely new
+  events after that notify.
 - **Invitational** — every nudge is skippable, no follow-up, no debt framing (ADR-001 ethos).
 - **Config** in `autonomy.yaml` (`monitor:` block): poll interval, imminent-window, rate caps,
   and which watchers are on — so Adam tunes it without code.

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.adamvialsmoore.pa-monitor.plist
+  ───────────────────────────────────
+  The constant-companion monitor (ADR-002). Runs skills/monitor/monitor.py as a persistent
+  loop: watches mail/calendar/deadlines, reacts to genuinely new events, keeps surfaces
+  fresh. KeepAlive restarts it if it dies; RunAtLoad starts it at login. First run seeds
+  state silently (no flood).
+
+  INSTALL:
+    cp schedule/launchagents/com.adamvialsmoore.pa-monitor.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.adamvialsmoore.pa-monitor.plist
+
+  MANAGE:
+    Stop:    launchctl unload ~/Library/LaunchAgents/com.adamvialsmoore.pa-monitor.plist
+    Status:  launchctl list | grep pa-monitor
+    Logs:    tail -f /tmp/pa-monitor.log
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adamvialsmoore.pa-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/adamvialsmoore/llm-personal-assistant/skills/monitor/monitor.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/adamvialsmoore/llm-personal-assistant</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/pa-monitor.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/pa-monitor-error.log</string>
+</dict>
+</plist>

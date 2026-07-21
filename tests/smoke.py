@@ -144,6 +144,31 @@ def _t_scripts():
         assert r.returncode == 0, f"{s}: {r.stderr}"
 
 
+# --- monitor + state (dry, temp state, no sends) ------------------------------
+
+@check("state: save/load roundtrip + dedup ledger")
+def _t_state():
+    from datetime import datetime
+    from lib.state import already_nudged, load_state, record_nudge, save_state
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "state.json"
+        s = load_state(p)
+        assert s["seeded"] is False
+        record_nudge(s, "evt:1", datetime(2026, 7, 21, 9, 0, 0))
+        save_state(s, p)
+        assert already_nudged(load_state(p), "evt:1")
+
+
+@check("monitor: seeds first pass, no-ops second (dry, temp state)")
+def _t_monitor():
+    with tempfile.TemporaryDirectory() as d:
+        st = Path(d) / "state.json"
+        r1 = run(["python3", "skills/monitor/monitor.py", "--once", "--dry", "--state", str(st)])
+        assert r1.returncode == 0 and "seeded" in r1.stdout, r1.stdout + r1.stderr
+        r2 = run(["python3", "skills/monitor/monitor.py", "--once", "--dry", "--state", str(st)])
+        assert r2.returncode == 0 and "events=" in r2.stdout, r2.stdout + r2.stderr
+
+
 def main() -> int:
     passed, failed = 0, 0
     print("PA smoke test\n" + "=" * 40)

@@ -43,6 +43,21 @@ nudges:
   pre_authorized: true
   always_skippable: true
 
+# The dynamic monitoring layer (ADR-002): an always-on loop that watches sources and reacts
+# to genuinely new events. Watching is read-only/autonomous; its nudges use the pre-authorized
+# exception above. Tuned chatty (Adam prefers to ignore over missing things); dedup keeps it
+# from nagging about the same thing twice. These values are the monitor's documented defaults.
+monitor:
+  enabled: true
+  poll_interval_s: 150        # ~2.5 min between passes
+  imminent_window_min: 15     # warn this far ahead of a meeting
+  surface_refresh_min: 15     # re-render dashboard + PA Today at most this often
+  min_gap_s: 30               # min seconds between nudges
+  hourly_cap: 20              # per-hour nudge cap before coalescing
+  coalesce_above: 3           # >this many new events in a pass -> one summary nudge
+  watchers: [mail, calendar, deadline]   # what it monitors
+  # dedup is always on and not configurable — it is what stops nagging.
+
 # Comms scoping (ADR-001 §4): both accounts, kept in separate labelled sections.
 comms:
   accounts:

@@ -4,6 +4,12 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Dynamic monitoring layer (ADR-002) — the constant companion:** `lib/state.py`
+  (persistent state + dedup/rate-limit ledger) + `skills/monitor/monitor.py`, an always-on
+  loop that watches mail/calendar/deadlines, reacts to genuinely new events (chatty, but
+  dedup means once-ever per event), and keeps surfaces fresh. LLM-free watching; nudges reuse
+  nudge.sh. `com.adamvialsmoore.pa-monitor` launch agent; `autonomy.yaml` `monitor:` config.
+  First run seeds silently. Smoke coverage added (state + monitor). ruff clean.
 - **Test harness**: `tests/smoke.py` — one-command end-to-end smoke test (10 checks, safe:
   temp store, read-only sources, no sends). Documented at the top of TESTING.md.
 - **Polish**: unified activity timeline now sorts **soonest-first** (undated last); the daily
