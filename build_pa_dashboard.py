@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""build_pa_dashboard — render the PA's own central-overview dashboard.
+"""build_pa_dashboard — render the PA's central-overview dashboard (the "command deck").
 
-Adam's ONE central space: everything relevant in a glance — upcoming dates (both calendars,
-incl. case dates), messages needing a look, and tasks. This is distinct from the CIDER
-dashboard, whose job is the opposite: a calm, undisturbed space for deep focus on the case.
-So the PA *surfaces* case-relevant dates/messages/tasks for visibility; it just never
-generates legal work-product or writes into CIDER's data/regenerate path.
+Adam's ONE central space: everything relevant at a glance — a stat bar, then compact,
+collapsible cards for today's dates, tasks, messages, and recent activity. Interactive:
+add a task and tap-to-complete from the page. Distinct from the CIDER dashboard (deep focus
+on the case); the PA *surfaces* case-relevant items for visibility but never generates legal
+work-product or writes into CIDER.
+
+Design: an ADHD-friendly instrument panel — monospace figures, one teal accent, masonry cards
+that collapse (state persisted), theme-aware. Not a long linear scroll.
 
 Output: data/PA_DASHBOARD.html (git-ignored — private).
-
-Design (neurodivergent-first): calm and legible, small wins acknowledged briefly, open
-work shown as an invitation — never itemised as debt. Theme-aware (light/dark).
 """
 
 from __future__ import annotations
@@ -26,319 +26,283 @@ from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
-# Muted, calm category accents (accessible in both light and dark).
 CATEGORY_COLOR = {
-    "Work": "#2E75B6",
-    "Personal": "#7C5CBF",
-    "Health": "#3FA796",
-    "Finance": "#C08A2E",
-    "Other": "#7A8290",
+    "Work": "#2E75B6", "Personal": "#7C5CBF", "Health": "#3FA796",
+    "Finance": "#C08A2E", "Other": "#7A8290",
 }
+_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢"}
+
+
+def _esc(s: str) -> str:
+    return html.escape(str(s))
 
 
 def _due_state(due: str | None, today: date) -> str:
-    """Classify a due date relative to today: overdue | today | soon | none."""
     if not due:
         return "none"
     try:
         d = date.fromisoformat(due)
     except ValueError:
         return "none"
-    if d < today:
-        return "overdue"
-    if d == today:
-        return "today"
-    return "soon"
+    return "overdue" if d < today else "today" if d == today else "soon"
 
 
-def _task_card(task: dict, today: date) -> str:
-    """One task as an HTML list item, with a gentle due-date cue."""
-    title = html.escape(task["title"])
-    accent = CATEGORY_COLOR.get(task.get("category", "Other"), CATEGORY_COLOR["Other"])
-    state = _due_state(task.get("due_date"), today)
-    due_html = ""
-    if task.get("due_date"):
-        label = {"overdue": "overdue", "today": "today", "soon": task["due_date"]}[state]
-        due_html = f'<span class="due due-{state}">{html.escape(label)}</span>'
-    desc = task.get("description")
-    desc_html = f'<div class="desc">{html.escape(desc)}</div>' if desc else ""
-    return (
-        f'<li class="task" style="--accent:{accent}">'
-        f'<span class="cat-dot"></span>'
-        f'<div class="body"><div class="title">{title}{due_html}</div>{desc_html}</div>'
-        f'<form class="done-form" method="post" action="/complete">'
-        f'<input type="hidden" name="id" value="{task["id"]}">'
-        f'<button title="mark done" aria-label="mark done">✓</button></form>'
-        f'</li>'
-    )
+def _card(key: str, title: str, count: str, body: str, *, collapsed: bool = False) -> str:
+    """A collapsible masonry card. `count` is a short figure shown in the header."""
+    cls = "card collapsed" if collapsed else "card"
+    cnt = f'<span class="cnt">{_esc(count)}</span>' if count else ""
+    return (f'<section class="{cls}" data-key="{_esc(key)}">'
+            f'<header class="card-h"><span class="ttl">{_esc(title)}</span>{cnt}'
+            f'<span class="chev">▾</span></header>'
+            f'<div class="card-b">{body}</div></section>')
 
 
-def _event_line(ev: dict) -> str:
-    """One upcoming-event row: date (+ time) and title."""
-    when = html.escape(ev.get("date") or "")
-    if ev.get("when") and ev["when"] != "all day":
-        when += " " + html.escape(ev["when"])
-    loc = f' · {html.escape(ev["location"][:34])}' if ev.get("location") else ""
-    return (f'<li class="row"><span class="when">{when}</span>'
-            f'<span class="what">{html.escape(ev["title"])}{loc}</span></li>')
-
-
-def _upcoming_section(today: date) -> str:
-    """Dates across both calendars for the next 14 days (case dates included)."""
-    end = today + timedelta(days=14)
-    blocks = []
+def _today_card(today: date) -> str:
+    blocks, total = [], 0
     for acct in ACCOUNTS:
-        evs = calendar_events(acct["cal"], today, end)
+        evs = calendar_events(acct["cal"], today, today)
         if not evs:
             continue
-        evs.sort(key=lambda e: (e.get("date") or "", e.get("when") or ""))
-        items = "\n".join(_event_line(e) for e in evs[:12])
-        blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
-                      f'<ul class="rows">{items}</ul>')
-    if not blocks:
-        return ""
-    return ('<section class="group"><h2>Upcoming<span class="count">14 days</span></h2>'
-            + "".join(blocks) + "</section>")
+        total += len(evs)
+        evs.sort(key=lambda e: (e.get("when") or ""))
+        rows = "".join(
+            f'<li class="row"><span class="when">{_esc(e["when"])}</span>'
+            f'<span class="what">{_esc(e["title"])}</span></li>' for e in evs)
+        blocks.append(f'<div class="sub">{_esc(acct["id"])}</div><ul class="rows">{rows}</ul>')
+    body = "".join(blocks) or '<p class="empty">Nothing scheduled.</p>'
+    return _card("today", "Today", str(total) if total else "", body)
 
 
-def _messages_section() -> str:
-    """Messages worth a look across both inboxes (kept separate)."""
-    blocks = []
-    for acct in ACCOUNTS:
-        worth, noise = partition_inbox(fetch_inbox(acct["mail"]))
-        if not worth:
-            blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
-                          f'<ul class="rows"><li class="row"><span class="what muted">'
-                          f'nothing standing out ({noise} quiet)</span></li></ul>')
+def _tasks_card(today: date, open_tasks: list[dict]) -> str:
+    groups = []
+    for category in CATEGORIES:
+        grp = [t for t in open_tasks if t.get("category") == category]
+        if not grp:
             continue
+        grp.sort(key=lambda x: (x.get("due_date") or "9999", x["id"]))
         rows = []
-        for m in worth[:5]:
-            dot = "•" if m["unread"] else "◦"
-            rows.append(f'<li class="row"><span class="when">{dot}</span>'
-                        f'<span class="what">{html.escape(m["from"])}: '
-                        f'{html.escape(m["subject"][:60])}</span></li>')
-        blocks.append(f'<div class="sub">{html.escape(acct["id"])}</div>'
-                      f'<ul class="rows">{"".join(rows)}</ul>')
-    return ('<section class="group"><h2>Needs a look<span class="count">mail</span></h2>'
-            + "".join(blocks) + "</section>")
+        for t in grp:
+            accent = CATEGORY_COLOR.get(category, CATEGORY_COLOR["Other"])
+            st = _due_state(t.get("due_date"), today)
+            due = ""
+            if t.get("due_date"):
+                lbl = {"overdue": "overdue", "today": "today", "soon": t["due_date"]}[st]
+                due = f'<span class="due due-{st}">{_esc(lbl)}</span>'
+            flag = '<span class="flag">‼</span>' if t.get("priority") == "high" else ""
+            eff = f'<span class="eff">{_esc(t.get("energy", "medium"))}</span>'
+            rows.append(
+                f'<li class="task" style="--accent:{accent}"><span class="dot"></span>'
+                f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
+                f'<form class="done" method="post" action="/complete">'
+                f'<input type="hidden" name="id" value="{t["id"]}">'
+                f'<button title="done">✓</button></form></li>')
+        groups.append(f'<div class="sub">{_esc(category)}</div>'
+                      f'<ul class="tasks">{"".join(rows)}</ul>')
+    body = "".join(groups) or '<p class="empty">Clear slate. ✨</p>'
+    return _card("tasks", "Tasks", str(len(open_tasks)) if open_tasks else "", body)
 
 
-# Short glyphs so the unified stream reads at a glance without a legend.
-_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢"}
+def _messages_card(worth_by_acct: dict) -> str:
+    blocks, total = [], 0
+    for acct in ACCOUNTS:
+        worth, noise = worth_by_acct[acct["id"]]
+        total += len(worth)
+        if not worth:
+            blocks.append(f'<div class="sub">{_esc(acct["id"])}</div>'
+                          f'<p class="empty sm">nothing standing out ({noise} quiet)</p>')
+            continue
+        rows = "".join(
+            f'<li class="row"><span class="mk">{"•" if m["unread"] else "◦"}</span>'
+            f'<span class="what"><b>{_esc(m["from"])}</b> {_esc(m["subject"][:52])}</span></li>'
+            for m in worth[:4])
+        extra = len(worth) - min(len(worth), 4)
+        more = f'<li class="row more">+{extra} more</li>' if extra > 0 else ""
+        blocks.append(f'<div class="sub">{_esc(acct["id"])}</div>'
+                      f'<ul class="rows">{rows}{more}</ul>')
+    return _card("messages", "Messages", str(total), "".join(blocks))
 
 
-def _activity_section(days: int = 14) -> str:
-    """A compact unified timeline across tasks, calendar, mail, and work files.
-
-    Additive read-only view — the practical seed of the "associative trails" idea:
-    everything the PA knows about on one plane, newest/soonest-first. Reuses the same
-    .group/.sub/.rows/.row/.when/.what classes as the other sections.
-    """
-    stream = unified(days=days)
+def _activity_card() -> str:
+    stream = unified(days=14)
     if not stream:
         return ""
-    rows = []
-    # Cap the timeline so the glance stays calm rather than exhaustive.
-    for a in stream[:14]:
-        glyph = _ACTIVITY_GLYPH.get(a.source, "·")
-        when = html.escape((a.timestamp or "")[:16])
-        rows.append(
-            f'<li class="row"><span class="when">{when}</span>'
-            f'<span class="what">{glyph} {html.escape(a.title[:64])}</span></li>'
-        )
-    return ('<section class="group"><h2>Recent activity'
-            '<span class="count">all sources</span></h2>'
-            f'<ul class="rows">{"".join(rows)}</ul></section>')
+    rows = "".join(
+        f'<li class="row"><span class="when">{_esc((a.timestamp or "")[:16])}</span>'
+        f'<span class="what">{_ACTIVITY_GLYPH.get(a.source, "·")} {_esc(a.title[:56])}</span></li>'
+        for a in stream[:16])
+    return _card("activity", "Recent activity", "", f'<ul class="rows">{rows}</ul>',
+                 collapsed=True)
 
 
-def _render_html(tasks: list[dict], today: date) -> str:
-    """Assemble the full self-contained dashboard document."""
+def _render_html(today: date) -> str:
+    tasks = load_tasks()
     open_tasks = [t for t in tasks if not t.get("completed")]
     done_tasks = [t for t in tasks if t.get("completed")]
-    overdue = sum(1 for t in open_tasks if _due_state(t.get("due_date"), today) == "overdue")
+    due_today = sum(1 for t in open_tasks
+                    if _due_state(t.get("due_date"), today) == "today")
+    overdue = sum(1 for t in open_tasks
+                  if _due_state(t.get("due_date"), today) == "overdue")
 
-    # Group open tasks by the fixed category order for a stable layout.
-    groups_html = []
-    for category in CATEGORIES:
-        group = [t for t in open_tasks if t.get("category") == category]
-        if not group:
-            continue
-        group.sort(key=lambda x: (x.get("due_date") or "9999", x["id"]))
-        items = "\n".join(_task_card(t, today) for t in group)
-        groups_html.append(
-            f'<section class="group"><h2>{html.escape(category)}'
-            f'<span class="count">{len(group)}</span></h2>'
-            f'<ul class="tasks">{items}</ul></section>'
-        )
+    worth_by_acct = {a["id"]: partition_inbox(fetch_inbox(a["mail"])) for a in ACCOUNTS}
+    new_mail = sum(len(w) for w, _ in worth_by_acct.values())
 
-    if open_tasks:
-        open_body = "\n".join(groups_html)
-    else:
-        open_body = '<p class="empty">Nothing open right now — a clear slate. ✨</p>'
+    # Next meeting across both calendars over the next 2 days.
+    next_mtg = "—"
+    upcoming = []
+    for acct in ACCOUNTS:
+        for e in calendar_events(acct["cal"], today, today + timedelta(days=2)):
+            if e.get("when") and e["when"] != "all day":
+                upcoming.append((e.get("date", ""), e["when"], e["title"]))
+    upcoming.sort()
+    if upcoming:
+        d, w, t = upcoming[0]
+        when = w if d == today.isoformat() else f"{d[5:]} {w}"
+        next_mtg = f"{when}  {t[:22]}"
 
-    # Small wins: acknowledged briefly, never as a ledger.
-    wins = ""
-    if done_tasks:
-        wins = (f'<p class="wins">✓ {len(done_tasks)} done recently — nice.</p>')
+    stats = [
+        ("open", str(len(open_tasks)), False),
+        ("due today", str(due_today), due_today > 0),
+        ("overdue", str(overdue), overdue > 0),
+        ("new mail", str(new_mail), False),
+    ]
+    deck = "".join(
+        f'<div class="stat{" alert" if alert else ""}"><span class="n">{_esc(n)}</span>'
+        f'<span class="l">{_esc(lbl)}</span></div>' for lbl, n, alert in stats)
+    deck += (f'<div class="stat next"><span class="n">{_esc(next_mtg)}</span>'
+             f'<span class="l">next</span></div>')
 
-    overdue_note = ""
-    if overdue:
-        overdue_note = (f'<p class="gentle">{overdue} '
-                        f'{"item is" if overdue == 1 else "items are"} past their date — '
-                        f'no rush, just when you\'re ready.</p>')
+    wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
+    cards = (_today_card(today) + _tasks_card(today, open_tasks)
+             + _messages_card(worth_by_acct) + _activity_card())
 
-    greeting = _greeting(today)
-    return _PAGE.format(
-        today=today.strftime("%A %-d %B %Y"),
-        greeting=html.escape(greeting),
-        open_count=len(open_tasks),
-        overdue_note=overdue_note,
-        wins=wins,
-        upcoming_body=_upcoming_section(today),
-        messages_body=_messages_section(),
-        tasks_header=('<section class="group"><h2>Tasks'
-                      f'<span class="count">{len(open_tasks)}</span></h2></section>'
-                      if open_tasks else ""),
-        open_body=open_body,
-        activity_body=_activity_section(),
+    return (
+        "<!doctype html><html lang=\"en\"><head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<title>Personal Assistant</title>"
+        f"<style>{_STYLE}</style></head><body><main>"
+        f'<header class="top"><div class="date">{_esc(today.strftime("%A %-d %B %Y"))}'
+        f'{wins}</div></header>'
+        f'<div class="deck">{deck}</div>'
+        '<form class="capture" method="post" action="/capture">'
+        '<input name="title" placeholder="Add a task…" autocomplete="off" autofocus>'
+        '<input name="theme" placeholder="theme" autocomplete="off" class="theme">'
+        '<select name="energy"><option value="low">low</option>'
+        '<option value="medium" selected>med</option><option value="high">high</option></select>'
+        '<select name="priority"><option value="high">high</option>'
+        '<option value="normal" selected>normal</option><option value="low">low</option></select>'
+        '<button>Add</button></form>'
+        f'<div class="grid">{cards}</div>'
+        '<footer>Central overview · CIDER is your focus space · private</footer>'
+        f"</main><script>{_SCRIPT}</script></body></html>"
     )
 
 
-def _greeting(today: date) -> str:
-    """A light, non-demanding greeting."""
-    return "Here's your day — pick what fits."
+_STYLE = """
+:root{ --bg:#f4f6f8; --card:#fff; --ink:#19212b; --muted:#6b7480; --line:#e4e8ec;
+  --accent:#0f766e; --overdue:#b4472e; --today:#0f766e;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace; }
+@media (prefers-color-scheme:dark){ :root{ --bg:#0e1116; --card:#161b22; --ink:#e6e9ee;
+  --muted:#8994a2; --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a; --today:#2dd4bf; } }
+*{ box-sizing:border-box; }
+body{ margin:0; padding:1.4rem 1.1rem 3rem; background:var(--bg); color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+main{ max-width:1100px; margin:0 auto; }
+.top .date{ font:.72rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); }
+.deck{ display:flex; flex-wrap:wrap; gap:.5rem; margin:.6rem 0 1rem; }
+.stat{ display:flex; flex-direction:column; gap:.2rem; padding:.5rem .8rem; min-width:5rem;
+  background:var(--card); border:1px solid var(--line); border-radius:12px; }
+.stat .n{ font:650 1.2rem/1 var(--mono); font-variant-numeric:tabular-nums; }
+.stat .l{ font:.6rem/1 var(--mono); letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); }
+.stat.alert .n{ color:var(--overdue); }
+.stat.next{ flex:1 1 12rem; }
+.stat.next .n{ font-size:.86rem; font-weight:600; padding-top:.15rem; }
+.capture{ display:flex; gap:.45rem; margin:0 0 1.1rem; flex-wrap:wrap; }
+.capture input,.capture select,.capture button{ padding:.5rem .7rem; border:1px solid var(--line);
+  border-radius:10px; background:var(--card); color:var(--ink); font-size:.9rem; }
+.capture input[name=title]{ flex:1 1 12rem; }
+.capture .theme{ flex:0 0 6.5rem; }
+.capture button{ cursor:pointer; font-weight:650; border-color:var(--accent); color:var(--accent); }
+.grid{ columns:330px; column-gap:14px; }
+.card{ break-inside:avoid; background:var(--card); border:1px solid var(--line);
+  border-radius:14px; margin:0 0 14px; overflow:hidden; }
+.card-h{ display:flex; align-items:center; gap:.5rem; padding:.6rem .85rem; cursor:pointer;
+  user-select:none; }
+.card-h .ttl{ font:650 .7rem/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink); }
+.card-h .cnt{ font:.7rem/1 var(--mono); color:var(--muted); padding:.1rem .4rem;
+  border:1px solid var(--line); border-radius:999px; }
+.card-h .chev{ margin-left:auto; color:var(--muted); font-size:.7rem; transition:transform .15s; }
+.card.collapsed .chev{ transform:rotate(-90deg); }
+.card.collapsed .card-b{ display:none; }
+.card-b{ padding:.1rem .85rem .7rem; }
+.sub{ font:.62rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted); margin:.6rem 0 .3rem; }
+.rows,.tasks{ list-style:none; margin:0; padding:0; }
+.row{ display:flex; gap:.55rem; padding:.28rem 0; border-top:1px solid var(--line); font-size:.9rem; }
+.row:first-child{ border-top:none; }
+.when{ flex:0 0 auto; min-width:4.6rem; color:var(--muted); font:.8rem/1.4 var(--mono);
+  font-variant-numeric:tabular-nums; }
+.mk{ flex:0 0 auto; width:.8rem; color:var(--muted); line-height:1.5; }
+.what{ flex:1 1 auto; min-width:0; }
+.row.more{ color:var(--muted); font-size:.78rem; padding-left:1.35rem; }
+.task{ display:flex; align-items:center; gap:.55rem; padding:.3rem 0;
+  border-top:1px solid var(--line); font-size:.9rem; }
+.task:first-child{ border-top:none; }
+.dot{ flex:0 0 auto; width:8px; height:8px; border-radius:50%; background:var(--accent); }
+.t-body{ flex:1 1 auto; min-width:0; }
+.flag{ color:var(--overdue); font-weight:700; margin-right:.15rem; }
+.due{ font:.68rem/1 var(--mono); padding:.08rem .4rem; border:1px solid var(--line);
+  border-radius:999px; color:var(--muted); margin-left:.2rem; }
+.due-overdue{ color:var(--overdue); border-color:var(--overdue); }
+.due-today{ color:var(--today); border-color:var(--today); }
+.eff{ font:.66rem/1 var(--mono); color:var(--muted); margin-left:.35rem; }
+.done{ margin:0; flex:0 0 auto; }
+.done button{ cursor:pointer; width:1.7rem; height:1.7rem; border-radius:50%;
+  border:1px solid var(--line); background:transparent; color:var(--muted); line-height:1; }
+.done button:hover{ color:var(--accent); border-color:var(--accent); }
+.empty{ color:var(--muted); font-size:.88rem; padding:.4rem 0; }
+.empty.sm{ padding:.15rem 0; font-size:.82rem; }
+footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-top:1.5rem; }
+@media (prefers-reduced-motion:reduce){ .chev{ transition:none; } }
+"""
 
-
-# Self-contained page: inline CSS, theme-aware, no external requests.
-_PAGE = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="60">
-<title>Personal Assistant</title>
-<style>
-  :root {{
-    --bg:#f7f8fa; --card:#ffffff; --ink:#1f2430; --muted:#6b7280; --line:#e6e8ec;
-    --overdue:#b4472e; --today:#2E75B6;
-  }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{
-      --bg:#14171c; --card:#1c2027; --ink:#e7e9ee; --muted:#9aa2af; --line:#2a2f38;
-      --overdue:#e08b76; --today:#7fb2e8;
-    }}
-  }}
-  * {{ box-sizing:border-box; }}
-  body {{
-    margin:0; padding:2.2rem 1.2rem 4rem; background:var(--bg); color:var(--ink);
-    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  }}
-  main {{ max-width:640px; margin:0 auto; }}
-  header {{ margin-bottom:1.8rem; }}
-  .date {{ color:var(--muted); font-size:.9rem; letter-spacing:.02em; }}
-  h1 {{ font-size:1.5rem; margin:.25rem 0 .1rem; font-weight:650; }}
-  .summary {{ color:var(--muted); font-size:.95rem; }}
-  .gentle {{ color:var(--muted); font-size:.9rem; margin:.4rem 0 0; }}
-  .wins {{ color:var(--today); font-size:.9rem; margin:.5rem 0 0; }}
-  .group {{
-    background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:1rem 1.1rem; margin:1rem 0; box-shadow:0 1px 2px rgba(0,0,0,.03);
-  }}
-  .group h2 {{
-    font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
-    margin:0 0 .6rem; display:flex; align-items:center; gap:.5rem; font-weight:650;
-  }}
-  .count {{
-    background:var(--bg); border:1px solid var(--line); border-radius:999px;
-    padding:0 .5rem; font-size:.75rem; color:var(--muted);
-  }}
-  ul.tasks {{ list-style:none; margin:0; padding:0; }}
-  li.task {{ display:flex; gap:.7rem; padding:.5rem 0; border-top:1px solid var(--line); }}
-  li.task:first-child {{ border-top:none; }}
-  .cat-dot {{ flex:0 0 auto; width:9px; height:9px; border-radius:50%;
-    background:var(--accent); margin-top:.55rem; }}
-  .body {{ flex:1 1 auto; }}
-  .title {{ display:flex; align-items:baseline; gap:.55rem; flex-wrap:wrap; }}
-  .desc {{ color:var(--muted); font-size:.88rem; margin-top:.15rem; }}
-  .due {{ font-size:.75rem; padding:.05rem .45rem; border-radius:999px;
-    border:1px solid var(--line); color:var(--muted); }}
-  .due-overdue {{ color:var(--overdue); border-color:var(--overdue); }}
-  .due-today {{ color:var(--today); border-color:var(--today); }}
-  .sub {{ font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
-    color:var(--muted); font-weight:650; margin:.7rem 0 .2rem; }}
-  .sub:first-child {{ margin-top:0; }}
-  ul.rows {{ list-style:none; margin:0; padding:0; }}
-  li.row {{ display:flex; gap:.6rem; padding:.32rem 0; border-top:1px solid var(--line);
-    font-size:.92rem; }}
-  li.row:first-child {{ border-top:none; }}
-  .when {{ flex:0 0 auto; color:var(--muted); font-variant-numeric:tabular-nums;
-    min-width:5.4rem; }}
-  .what {{ flex:1 1 auto; }}
-  .what.muted {{ color:var(--muted); }}
-  .capture {{ display:flex; gap:.5rem; margin:0 0 1.4rem; flex-wrap:wrap; }}
-  .capture input, .capture select, .capture button {{ padding:.5rem .7rem;
-    border:1px solid var(--line); border-radius:10px; background:var(--card);
-    color:var(--ink); font-size:.92rem; }}
-  .capture input[name=title] {{ flex:1 1 12rem; }}
-  .capture button {{ cursor:pointer; font-weight:650; }}
-  li.task {{ align-items:center; }}
-  .done-form {{ margin:0; flex:0 0 auto; }}
-  .done-form button {{ cursor:pointer; width:1.9rem; height:1.9rem; border-radius:50%;
-    border:1px solid var(--line); background:var(--card); color:var(--muted); line-height:1; }}
-  .done-form button:hover {{ color:var(--today); border-color:var(--today); }}
-  .empty {{ color:var(--muted); text-align:center; padding:2rem 0; }}
-  footer {{ color:var(--muted); font-size:.78rem; text-align:center; margin-top:2rem; }}
-</style>
-</head>
-<body>
-<main>
-  <header>
-    <div class="date">{today}</div>
-    <h1>{greeting}</h1>
-    <div class="summary">{open_count} open</div>
-    {overdue_note}
-    {wins}
-  </header>
-  <form class="capture" method="post" action="/capture">
-    <input name="title" placeholder="Add a task…" autocomplete="off" autofocus>
-    <input name="theme" placeholder="theme" autocomplete="off" style="flex:0 0 7rem">
-    <select name="energy">
-      <option value="low">low</option>
-      <option value="medium" selected>medium</option>
-      <option value="high">high</option>
-    </select>
-    <select name="priority">
-      <option value="high">high</option>
-      <option value="normal" selected>normal</option>
-      <option value="low">low</option>
-    </select>
-    <button>Add</button>
-  </form>
-  {upcoming_body}
-  {messages_body}
-  {tasks_header}
-  {open_body}
-  {activity_body}
-  <footer>Your central overview · CIDER is your focus space · generated locally, private</footer>
-</main>
-</body>
-</html>
+_SCRIPT = """
+(function(){
+  var KEY='pa-collapsed';
+  var state=JSON.parse(localStorage.getItem(KEY)||'{}');
+  document.querySelectorAll('.card').forEach(function(c){
+    var k=c.dataset.key;
+    if(k in state){ c.classList.toggle('collapsed', state[k]); }
+    c.querySelector('.card-h').addEventListener('click', function(){
+      c.classList.toggle('collapsed');
+      state[k]=c.classList.contains('collapsed');
+      localStorage.setItem(KEY, JSON.stringify(state));
+    });
+  });
+  // Refresh every 60s so monitor updates appear — but never while adding a task.
+  setInterval(function(){
+    var a=document.activeElement;
+    if(a && a.closest && a.closest('.capture')) return;
+    location.reload();
+  }, 60000);
+})();
 """
 
 
 def build(output: Path | None = None, today: date | None = None) -> Path:
     """Render the dashboard to disk and return its path."""
     today = today or date.today()
-    tasks = load_tasks()
     output = output or (repo_root() / "data" / "PA_DASHBOARD.html")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(_render_html(tasks, today), encoding="utf-8")
+    output.write_text(_render_html(today), encoding="utf-8")
     return output
 
 
 def main() -> int:
-    path = build()
-    print(f"wrote {path}")
+    print(f"wrote {build()}")
     return 0
 
 

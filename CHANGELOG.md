@@ -4,6 +4,11 @@ All notable changes to this project. Successor to the legacy `updates.txt` habit
 Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
+- **Dashboard redesign (command deck)**: replaced the long linear layout with an at-a-glance
+  instrument panel — a monospace stat bar (open / due / overdue / new mail / next meeting),
+  masonry cards (Today · Tasks · Messages · Activity) that **collapse** with state persisted in
+  localStorage, one teal accent, theme-aware. Messages capped 4/account with "+N more".
+  Auto-refresh is JS-guarded so it never interrupts typing a capture.
 - **Westminster / Enact work comms (on-demand)**: `lib/cdp.py` — a zero-dependency stdlib
   Chrome DevTools Protocol client — reads the visible text of Adam's already-logged-in
   dedicated Enact Chrome (remote-debug :9222). `skills/work-pull/` summarises Outlook
