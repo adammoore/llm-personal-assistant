@@ -5,6 +5,7 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 ### Dashboard v2 (ADR-003) — in progress
+- **Task delete**: a 🗑 per task soft-deletes (reversible — `deleted`/`deleted_at`, stays in the store, hidden from every view via `load_tasks(include_deleted=False)`). `/delete` route + `lib.taskstore.delete_task`. Now ✎ edit · ✨ breakdown · ✓ done · 🗑 delete.
 - **Messages: expand + auto-summary**: "+N more" reveals the full per-account list (client
   side); a "✨ summarise" button runs `lib/mailsummary.py` (claude -p over the noise-filtered
   shortlist) into an ADHD-friendly "who's waiting / time-sensitive" digest, cached to

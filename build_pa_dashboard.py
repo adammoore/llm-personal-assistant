@@ -125,6 +125,9 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
                 f'<form class="done" method="post" action="/complete">'
                 f'<input type="hidden" name="id" value="{t["id"]}">'
                 f'<button title="done">✓</button></form>'
+                f'<form class="del" method="post" action="/delete">'
+                f'<input type="hidden" name="id" value="{t["id"]}">'
+                f'<button title="delete">🗑</button></form>'
                 f'</div>{edit_form}{steps_html}</li>')
         groups.append(f'<div class="sub">{_esc(category)}</div>'
                       f'<ul class="tasks">{"".join(rows)}</ul>')
@@ -335,10 +338,12 @@ ol.steps li{ padding:.08rem 0; }
 .due-overdue{ color:var(--overdue); border-color:var(--overdue); }
 .due-today{ color:var(--today); border-color:var(--today); }
 .eff{ font:.66rem/1 var(--mono); color:var(--muted); margin-left:.35rem; }
-.done{ margin:0; flex:0 0 auto; }
-.done button{ cursor:pointer; width:1.7rem; height:1.7rem; border-radius:50%;
-  border:1px solid var(--line); background:transparent; color:var(--muted); line-height:1; }
+.done,.del{ margin:0; flex:0 0 auto; }
+.done button,.del button{ cursor:pointer; width:1.7rem; height:1.7rem; border-radius:50%;
+  border:1px solid var(--line); background:transparent; color:var(--muted); line-height:1;
+  font-size:.85rem; }
 .done button:hover{ color:var(--accent); border-color:var(--accent); }
+.del button:hover{ color:var(--overdue); border-color:var(--overdue); }
 .empty{ color:var(--muted); font-size:.88rem; padding:.4rem 0; }
 .empty.sm{ padding:.15rem 0; font-size:.82rem; }
 footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-top:1.5rem; }

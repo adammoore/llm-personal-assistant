@@ -51,9 +51,11 @@ def md_store() -> Path:
     return repo_root() / "data" / "tasks.md"
 
 
-def load_tasks(store: Path | None = None) -> list[dict]:
+def load_tasks(store: Path | None = None, *, include_deleted: bool = False) -> list[dict]:
     """Return the task list, or [] if the store does not exist yet.
 
+    By default soft-deleted tasks are excluded, so every display consumer hides them
+    automatically; mutators pass include_deleted=True to see (and preserve) the full store.
     Raises SystemExit(2) rather than overwrite a store we cannot parse.
     """
     store = store or json_store()
@@ -68,6 +70,8 @@ def load_tasks(store: Path | None = None) -> list[dict]:
     if not isinstance(data, list):
         print(f"error: {store} does not contain a JSON array", file=sys.stderr)
         raise SystemExit(2)
+    if not include_deleted:
+        data = [t for t in data if not t.get("deleted")]
     return data
 
 
@@ -124,7 +128,7 @@ def add_task(
         print(f"error: energy must be one of {ENERGIES}", file=sys.stderr)
         raise SystemExit(2)
 
-    tasks = load_tasks(json_path)
+    tasks = load_tasks(json_path, include_deleted=True)
     created_at = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     # Keep the original field order intact; the ENERGY/BREAKDOWN dimensions append at the end.
     task = {
@@ -151,11 +155,25 @@ def add_task(
 def complete_task(task_id: int, *, json_path: Path | None = None,
                   md_path: Path | None = None, now: datetime | None = None) -> dict | None:
     """Mark a task complete (records completed_at) and persist. Returns it, or None if absent."""
-    tasks = load_tasks(json_path)
+    tasks = load_tasks(json_path, include_deleted=True)
     for t in tasks:
         if int(t.get("id", -1)) == int(task_id):
             t["completed"] = True
             t["completed_at"] = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+            save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
+            return t
+    return None
+
+
+def delete_task(task_id: int, *, json_path: Path | None = None,
+                md_path: Path | None = None, now: datetime | None = None) -> dict | None:
+    """Soft-delete a task (reversible: sets deleted=True + deleted_at, stays in the store,
+    hidden from every view). Returns it, or None if not found."""
+    tasks = load_tasks(json_path, include_deleted=True)
+    for t in tasks:
+        if int(t.get("id", -1)) == int(task_id):
+            t["deleted"] = True
+            t["deleted_at"] = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
             save_tasks(tasks, json_path=json_path, md_path=md_path, now=now)
             return t
     return None
@@ -172,7 +190,7 @@ def update_task(task_id: int, fields: dict, *, json_path: Path | None = None,
     field; an empty title is ignored. Invalid category/priority/energy are dropped. Returns
     the updated task, or None if not found.
     """
-    tasks = load_tasks(json_path)
+    tasks = load_tasks(json_path, include_deleted=True)
     for t in tasks:
         if int(t.get("id", -1)) != int(task_id):
             continue
@@ -201,7 +219,7 @@ def update_task(task_id: int, fields: dict, *, json_path: Path | None = None,
 def set_steps(task_id: int, steps: list[str], *, json_path: Path | None = None,
               md_path: Path | None = None, now: datetime | None = None) -> dict | None:
     """Replace a task's breakdown steps (Magic ToDo) and persist. Returns it, or None."""
-    tasks = load_tasks(json_path)
+    tasks = load_tasks(json_path, include_deleted=True)
     for t in tasks:
         if int(t.get("id", -1)) == int(task_id):
             t["steps"] = [s.strip() for s in steps if s and s.strip()]
@@ -212,6 +230,7 @@ def set_steps(task_id: int, steps: list[str], *, json_path: Path | None = None,
 
 def render_markdown(tasks: list[dict], *, now: datetime | None = None) -> str:
     """Render the store as a grouped, human-readable markdown document."""
+    tasks = [t for t in tasks if not t.get("deleted")]  # never mirror soft-deleted tasks
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     lines = [
         "# Tasks",

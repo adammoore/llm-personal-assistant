@@ -26,7 +26,8 @@ sys.path.insert(0, str(REPO))
 from lib.magictodo import breakdown  # noqa: E402
 from lib.mailsummary import summarize as summarize_inbox  # noqa: E402
 from lib.taskstore import (  # noqa: E402
-    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, load_tasks, set_steps, update_task,
+    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, delete_task, load_tasks,
+    set_steps, update_task,
 )
 
 
@@ -86,6 +87,11 @@ class Handler(BaseHTTPRequestHandler):
                 tid = first("id")
                 if tid.isdigit():
                     complete_task(int(tid))
+                    _rebuild()
+            elif path == "/delete":
+                tid = first("id")
+                if tid.isdigit():
+                    delete_task(int(tid))
                     _rebuild()
             elif path == "/edit":
                 tid = first("id")
