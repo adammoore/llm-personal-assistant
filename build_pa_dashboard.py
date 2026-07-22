@@ -100,64 +100,110 @@ def _today_card(today: date) -> str:
     return _card("today", "Today", str(total) if total else "", body)
 
 
+_PRIO_RANK = {"high": 0, "normal": 1, "low": 2}
+
+
+def _urgency_band(due: str | None, today: date) -> str:
+    """Spatial vertical axis: now | next (1-3d) | soon (2wk) | someday (undated/far)."""
+    if not due:
+        return "someday"
+    try:
+        d = date.fromisoformat(due)
+    except ValueError:
+        return "someday"
+    delta = (d - today).days
+    if delta <= 0:
+        return "now"
+    if delta <= 3:
+        return "next"
+    if delta <= 14:
+        return "soon"
+    return "someday"
+
+
+def _task_li(t: dict, today: date) -> str:
+    """One task <li> — shared by the category grid and the spatial urgency view.
+
+    Carries data-state / data-theme / data-context / data-priority so facets and the spatial
+    view can encode meaning (urgency=band, need=size via priority, context=colour) with CSS.
+    """
+    category = t.get("category") or "Other"
+    accent = CATEGORY_COLOR.get(category, CATEGORY_COLOR["Other"])
+    st = _due_state(t.get("due_date"), today)
+    due = ""
+    if t.get("due_date"):
+        lbl = {"overdue": "overdue", "today": "today", "soon": t["due_date"]}[st]
+        due = f'<span class="due due-{st}">{_esc(lbl)}</span>'
+    flag = '<span class="flag">‼</span>' if t.get("priority") == "high" else ""
+    eff = f'<span class="eff">{_esc(t.get("energy", "medium"))}</span>'
+    steps = t.get("steps") or []
+    steps_html = ""
+    if steps:
+        items = "".join(
+            f'<li class="next-step">{_esc(s)}</li>' if i == 0 else f"<li>{_esc(s)}</li>"
+            for i, s in enumerate(steps))
+        steps_html = f'<ol class="steps">{items}</ol>'
+    edit_form = (
+        f'<form class="edit" method="post" action="/edit" hidden>'
+        f'<input type="hidden" name="id" value="{t["id"]}">'
+        f'<input name="title" value="{_esc(t["title"])}">'
+        f'{_sel("category", CATEGORIES, category)}'
+        f'<input name="theme" value="{_esc(t.get("theme") or "")}" placeholder="theme">'
+        f'{_sel("priority", ["high", "normal", "low"], t.get("priority"))}'
+        f'{_sel("energy", ["low", "medium", "high"], t.get("energy"))}'
+        f'<input name="due" value="{_esc(t.get("due_date") or "")}" placeholder="due YYYY-MM-DD">'
+        f'<button>Save</button></form>')
+    return (
+        f'<li class="task" data-state="{st}" '
+        f'data-priority="{_esc(t.get("priority") or "normal")}" '
+        f'data-theme="{_esc((t.get("theme") or "").lower())}" '
+        f'data-context="{_ctx(t.get("theme"), category)}" style="--accent:{accent}">'
+        f'<div class="t-row"><span class="dot"></span>'
+        f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
+        f'<button type="button" class="edit-btn" title="edit">✎</button>'
+        f'<form class="mtd" method="post" action="/breakdown">'
+        f'<input type="hidden" name="id" value="{t["id"]}">'
+        f'<input type="hidden" name="spice" class="spice-in" value="3">'
+        f'<button title="break it down">✨</button></form>'
+        f'<form class="done" method="post" action="/complete">'
+        f'<input type="hidden" name="id" value="{t["id"]}">'
+        f'<button title="done">✓</button></form>'
+        f'<form class="del" method="post" action="/delete">'
+        f'<input type="hidden" name="id" value="{t["id"]}">'
+        f'<button title="delete">🗑</button></form>'
+        f'</div>{edit_form}{steps_html}</li>')
+
+
 def _tasks_card(today: date, open_tasks: list[dict]) -> str:
-    groups = []
+    if not open_tasks:
+        return _card("tasks", "Tasks", "", '<p class="empty">Clear slate. ✨</p>')
+
+    # Grid grouping: by category (the predictable default).
+    cat = []
     for category in CATEGORIES:
-        grp = [t for t in open_tasks if t.get("category") == category]
+        grp = [t for t in open_tasks if (t.get("category") or "Other") == category]
         if not grp:
             continue
         grp.sort(key=lambda x: (x.get("due_date") or "9999", x["id"]))
-        rows = []
-        for t in grp:
-            accent = CATEGORY_COLOR.get(category, CATEGORY_COLOR["Other"])
-            st = _due_state(t.get("due_date"), today)
-            due = ""
-            if t.get("due_date"):
-                lbl = {"overdue": "overdue", "today": "today", "soon": t["due_date"]}[st]
-                due = f'<span class="due due-{st}">{_esc(lbl)}</span>'
-            flag = '<span class="flag">‼</span>' if t.get("priority") == "high" else ""
-            eff = f'<span class="eff">{_esc(t.get("energy", "medium"))}</span>'
-            steps = t.get("steps") or []
-            steps_html = ""
-            if steps:
-                # Emphasise the FIRST step as the concrete next action (research: surface the
-                # next physical step, not the whole goal — lowers task-initiation friction).
-                items = "".join(
-                    f'<li class="next-step">{_esc(s)}</li>' if i == 0 else f"<li>{_esc(s)}</li>"
-                    for i, s in enumerate(steps))
-                steps_html = f'<ol class="steps">{items}</ol>'
-            edit_form = (
-                f'<form class="edit" method="post" action="/edit" hidden>'
-                f'<input type="hidden" name="id" value="{t["id"]}">'
-                f'<input name="title" value="{_esc(t["title"])}">'
-                f'{_sel("category", CATEGORIES, t.get("category"))}'
-                f'<input name="theme" value="{_esc(t.get("theme") or "")}" placeholder="theme">'
-                f'{_sel("priority", ["high", "normal", "low"], t.get("priority"))}'
-                f'{_sel("energy", ["low", "medium", "high"], t.get("energy"))}'
-                f'<input name="due" value="{_esc(t.get("due_date") or "")}" placeholder="due YYYY-MM-DD">'
-                f'<button>Save</button></form>')
-            rows.append(
-                f'<li class="task" data-state="{st}" '
-                f'data-theme="{_esc((t.get("theme") or "").lower())}" '
-                f'data-context="{_ctx(t.get("theme"), category)}" style="--accent:{accent}">'
-                f'<div class="t-row"><span class="dot"></span>'
-                f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
-                f'<button type="button" class="edit-btn" title="edit">✎</button>'
-                f'<form class="mtd" method="post" action="/breakdown">'
-                f'<input type="hidden" name="id" value="{t["id"]}">'
-                f'<input type="hidden" name="spice" class="spice-in" value="3">'
-                f'<button title="break it down">✨</button></form>'
-                f'<form class="done" method="post" action="/complete">'
-                f'<input type="hidden" name="id" value="{t["id"]}">'
-                f'<button title="done">✓</button></form>'
-                f'<form class="del" method="post" action="/delete">'
-                f'<input type="hidden" name="id" value="{t["id"]}">'
-                f'<button title="delete">🗑</button></form>'
-                f'</div>{edit_form}{steps_html}</li>')
-        groups.append(f'<div class="sub">{_esc(category)}</div>'
-                      f'<ul class="tasks">{"".join(rows)}</ul>')
-    body = "".join(groups) or '<p class="empty">Clear slate. ✨</p>'
-    return _card("tasks", "Tasks", str(len(open_tasks)) if open_tasks else "", body)
+        cat.append(f'<div class="sub">{_esc(category)}</div>'
+                   f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul>')
+    cat_html = f'<div class="grouping cat">{"".join(cat)}</div>'
+
+    # Spatial grouping: by urgency band (height = urgency). Same tasks, meaning from position.
+    urg = []
+    for key, label in (("now", "Now"), ("next", "Next · 1–3 days"),
+                       ("soon", "Soon · 2 weeks"), ("someday", "Someday")):
+        grp = [t for t in open_tasks if _urgency_band(t.get("due_date"), today) == key]
+        if not grp:
+            continue
+        grp.sort(key=lambda x: (_PRIO_RANK.get(x.get("priority"), 1),
+                                x.get("due_date") or "9999", x["id"]))
+        urg.append(f'<div class="band" data-band="{key}"><div class="band-h">{_esc(label)}'
+                   f'<span class="band-n">{len(grp)}</span></div>'
+                   f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul></div>')
+    urg_html = f'<div class="grouping urg">{"".join(urg)}</div>'
+
+    return _card("tasks", "Tasks", str(len(open_tasks)), cat_html + urg_html)
 
 
 def _msg_row(m: dict, hidden: bool = False) -> str:
@@ -314,7 +360,10 @@ def _render_html(today: date) -> str:
         f"<style>{_STYLE}</style></head><body><main>"
         f'<header class="top"><div class="date">{_esc(today.strftime("%A %-d %B %Y"))}'
         f'{wins}</div>'
-        '<div class="prefs"><button id="theme-btn" title="cycle theme">◐ theme</button>'
+        '<div class="prefs">'
+        '<button id="layout-btn" title="grid ↔ spatial map (urgency · need · context)">'
+        '⊞ grid</button>'
+        '<button id="theme-btn" title="cycle theme">◐ theme</button>'
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
         f'<div class="deck">{deck}</div>'
@@ -496,6 +545,21 @@ footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-
 .facets button[data-facet="context:personal"]::before{ background:var(--c-personal); }
 .facets button[data-facet="context:work"]::before{ background:var(--c-workctx); }
 .facets button[data-facet="context:case"]::before{ background:var(--c-case); }
+/* Spatial layout (toggle): meaning from position — height=urgency, size=need, colour=context. */
+.grouping.urg{ display:none; }
+body.spatial .grouping.cat{ display:none; }
+body.spatial .grouping.urg{ display:block; }
+.band-h{ font:.62rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); margin:.6rem 0 .3rem; display:flex; align-items:center; gap:.4rem; }
+.band-n{ background:var(--bg); border:1px solid var(--line); border-radius:999px;
+  padding:0 .4rem; font-size:.66rem; }
+.band[data-band=now] .band-h{ color:var(--overdue); }
+body.spatial .task{ border-left:3px solid transparent; padding-left:.45rem; }
+body.spatial .task[data-context=personal]{ border-left-color:var(--c-personal); }
+body.spatial .task[data-context=work]{ border-left-color:var(--c-workctx); }
+body.spatial .task[data-context=case]{ border-left-color:var(--c-case); }
+body.spatial .task[data-priority=high] .t-body{ font-weight:650; font-size:1.03rem; }
+body.spatial .task[data-priority=low] .t-body{ color:var(--muted); font-size:.9rem; }
 """
 
 _SCRIPT = """
@@ -574,6 +638,15 @@ _SCRIPT = """
       var b=f.querySelector('button'); b.textContent='pulling…'; b.disabled=true;
     });
   });
+  // Layout toggle — grid (by category) ↔ spatial map (urgency=height, need=size, context=colour).
+  var lb=document.getElementById('layout-btn');
+  function setLayout(sp){ document.body.classList.toggle('spatial', sp);
+    localStorage.setItem('pa-spatial', sp?'1':'0');
+    if(lb) lb.textContent = sp?'▤ map':'⊞ grid'; }
+  if(localStorage.getItem('pa-spatial')==='1') setLayout(true);
+  if(lb) lb.addEventListener('click', function(){
+    setLayout(!document.body.classList.contains('spatial')); });
+
   // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
   function applyFacet(f){
     f=f||'all';
