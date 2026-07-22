@@ -26,6 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.mailsummary import load_summary  # noqa: E402
+from lib.monica import configured as monica_ok  # noqa: E402
+from lib.monica import upcoming_birthdays  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
 CATEGORY_COLOR = {
@@ -290,6 +292,23 @@ def _work_card() -> str:
     return _card("work", "Work (Westminster)", count, body, collapsed=True)
 
 
+def _people_card() -> str:
+    """People (Monica) — upcoming birthdays, or a setup prompt until Monica is connected."""
+    if not monica_ok():
+        body = ('<p class="empty sm">Connect your Monica CRM to see birthdays &amp; '
+                'relationships here — see <b>MONICA_SETUP.md</b>.</p>')
+        return _card("people", "People", "", body, collapsed=True)
+    bdays = upcoming_birthdays(days=45)
+    if not bdays:
+        body = '<p class="empty sm">No birthdays in the next 6 weeks.</p>'
+    else:
+        rows = "".join(
+            f'<li class="row"><span class="when">{b["in_days"]}d</span>'
+            f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
+        body = f'<ul class="rows">{rows}</ul>'
+    return _card("people", "People", str(len(bdays)) if bdays else "", body, collapsed=True)
+
+
 def _render_html(today: date) -> str:
     tasks = load_tasks()
     open_tasks = [t for t in tasks if not t.get("completed")]
@@ -331,7 +350,7 @@ def _render_html(today: date) -> str:
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
-             + _messages_card(worth_by_acct) + _work_card() + _activity_card())
+             + _messages_card(worth_by_acct) + _work_card() + _people_card() + _activity_card())
 
     # Facet bar — one calm row, one active facet at a time, each pivot single-focus (DESIGN.md).
     themes = sorted({t["theme"] for t in open_tasks if t.get("theme")})
@@ -344,6 +363,7 @@ def _render_html(today: date) -> str:
         '<button data-facet="key:tasks">tasks</button>'
         '<button data-facet="key:messages">mail</button>'
         '<button data-facet="key:work">work</button>'
+        '<button data-facet="key:people">people</button>'
         '<button data-facet="key:activity">activity</button>'
         + (f'<span class="fg">theme</span>{theme_chips}' if theme_chips else "")
         + '<span class="fg">context</span>'
@@ -401,7 +421,8 @@ _STYLE = """
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
   /* Subtle, muted domain hues — colour for meaning, never alarm/clash (DESIGN.md). */
   --c-dates:#5b74b8; --c-tasks:#2f9e8f; --c-mail:#8a6bb0; --c-work:#c0894a;
-  --c-activity:#7c8592; --c-personal:#8a6bb0; --c-workctx:#c0894a; --c-case:#b46a54; }
+  --c-activity:#7c8592; --c-personal:#8a6bb0; --c-workctx:#c0894a; --c-case:#b46a54;
+  --c-people:#b0708a; }
 /* Auto dark (unless the user has explicitly chosen light) */
 @media (prefers-color-scheme:dark){ :root:not([data-theme=light]){ --bg:#0e1116; --card:#161b22;
   --ink:#e6e9ee; --muted:#8994a2; --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a;
@@ -538,6 +559,8 @@ footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-
 .card[data-key=work] .ttl{ color:var(--c-work); }
 .card[data-key=activity]{ border-top:3px solid var(--c-activity); }
 .card[data-key=activity] .ttl{ color:var(--c-activity); }
+.card[data-key=people]{ border-top:3px solid var(--c-people); }
+.card[data-key=people] .ttl{ color:var(--c-people); }
 /* Context chips carry their hue as a small dot. */
 .facets button[data-facet^="context:"]{ display:inline-flex; align-items:center; gap:.35rem; }
 .facets button[data-facet^="context:"]::before{ content:""; width:.5rem; height:.5rem;

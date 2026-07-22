@@ -5,6 +5,7 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 ### Dashboard v2 (ADR-003) — in progress
+- **People layer scaffold (ADR-004, Monica)**: `lib/monica.py` — a defensive read-only Monica CRM reader (config in git-ignored `monica.env`); a **People** card (upcoming birthdays, or a setup prompt until connected) + a `people` facet. `MONICA_SETUP.md` + `monica.env.example`. Field mapping to be verified against Adam's live Monica once self-hosted.
 - **Spatial layout (ADR-004, spatial hypertext)**: a **⊞ grid ↔ ▤ map** toggle. The map encodes meaning by position — **urgency = height** (Now/Next/Soon/Someday bands), **need = size/weight** (priority), **context = left-edge colour** — within a predictable deterministic structure (reconciling spatial expressiveness with ADHD predictability, DESIGN.md). Facets still pivot it. Persisted; grid remains the default.
 - **Facet bar (② ZigZag lens)**: one calm row — **all · source** (dates/tasks/mail/work/activity, single-card focus) **· theme** (#Enact/#ZigZag/… follow-a-thread across tasks+activity) **· context** (personal/work/case, derived). One active facet at a time, each pivot single-focus, persisted. Tasks/activity tagged data-theme/data-context.
 - **Subtle colour scheme**: muted per-card domain hues (top-edge + title) and coloured context-chip dots — colour for meaning, no clash/alarm (per DESIGN.md).
