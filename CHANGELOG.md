@@ -5,6 +5,8 @@ Format loosely follows Keep a Changelog; dates are absolute.
 
 ## [Unreleased] — source integrations
 ### Dashboard v2 (ADR-003) — in progress
+- **Facet bar (② ZigZag lens)**: one calm row — **all · source** (dates/tasks/mail/work/activity, single-card focus) **· theme** (#Enact/#ZigZag/… follow-a-thread across tasks+activity) **· context** (personal/work/case, derived). One active facet at a time, each pivot single-focus, persisted. Tasks/activity tagged data-theme/data-context.
+- **Subtle colour scheme**: muted per-card domain hues (top-edge + title) and coloured context-chip dots — colour for meaning, no clash/alarm (per DESIGN.md).
 - **Research-informed interface update (DESIGN.md)**: applied evidence-based ADHD/ND UX (deep-research, 23/25 verified claims) — base type **≥16.5px at 1.6 line-height**, **user theme cycle + A−/A+ text size** (persisted; individual variation is large), softened urgency colour (position+label over alarm-red), full `prefers-reduced-motion` support, a reload guard that won't interrupt you, and the **first breakdown step emphasised as the next action**. `DESIGN.md` records the cited principles + ZigZag/Context Rover mapping.
 - **Westminster in the view (③)**: `work-pull --cache` → `data/work_cache.json`; a **Work (Westminster)** card + **↻ refresh** and **pull work** buttons; work items join the unified activity stream (`lib/activity.from_work_cache`). `/refresh` + `/pull-work` routes.
 - **Retract stale nudges (④)**: the monitor records each mail nudge's Signal message id; when that email is later archived/deleted it **remote-deletes the nudge** (`openclaw message delete` → signal-cli `remoteDelete`), with a follow-up-note fallback. Dedup untouched; dry-safe; `mail_nudges` ledger in state (capped, tombstoned).

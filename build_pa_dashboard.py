@@ -38,6 +38,21 @@ _ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢
 _WORK_CACHE = Path(__file__).resolve().parent / "data" / "work_cache.json"
 
 
+# Context is derived (a predictable lens, not a per-item field) — see DESIGN.md / ADR-003.
+_WORK_THEMES = {"enact", "zigzag", "notch8", "westminster", "work"}
+_CASE_THEMES = {"case", "court", "fdr", "hearing", "family", "cider"}
+
+
+def _ctx(theme: str | None, category: str | None) -> str:
+    """Derive a task/activity's context: case | work | personal (predictable, keyword-based)."""
+    t = (theme or "").lower()
+    if t in _CASE_THEMES:
+        return "case"
+    if t in _WORK_THEMES or category == "Work":
+        return "work"
+    return "personal"
+
+
 def _esc(s: str) -> str:
     return html.escape(str(s))
 
@@ -122,7 +137,9 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
                 f'<input name="due" value="{_esc(t.get("due_date") or "")}" placeholder="due YYYY-MM-DD">'
                 f'<button>Save</button></form>')
             rows.append(
-                f'<li class="task" data-state="{st}" style="--accent:{accent}">'
+                f'<li class="task" data-state="{st}" '
+                f'data-theme="{_esc((t.get("theme") or "").lower())}" '
+                f'data-context="{_ctx(t.get("theme"), category)}" style="--accent:{accent}">'
                 f'<div class="t-row"><span class="dot"></span>'
                 f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
                 f'<button type="button" class="edit-btn" title="edit">✎</button>'
@@ -180,7 +197,9 @@ def _activity_card() -> str:
     if not stream:
         return ""
     rows = "".join(
-        f'<li class="row"><span class="when">{_esc((a.timestamp or "")[:16])}</span>'
+        f'<li class="row" data-theme="{_esc((a.theme or "").lower())}" '
+        f'data-context="{_ctx(a.theme, None)}">'
+        f'<span class="when">{_esc((a.timestamp or "")[:16])}</span>'
         f'<span class="what">{_ACTIVITY_GLYPH.get(a.source, "·")} {_esc(a.title[:56])}</span></li>'
         for a in stream[:16])
     return _card("activity", "Recent activity", "", f'<ul class="rows">{rows}</ul>',
@@ -268,6 +287,25 @@ def _render_html(today: date) -> str:
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
              + _messages_card(worth_by_acct) + _work_card() + _activity_card())
 
+    # Facet bar — one calm row, one active facet at a time, each pivot single-focus (DESIGN.md).
+    themes = sorted({t["theme"] for t in open_tasks if t.get("theme")})
+    theme_chips = "".join(
+        f'<button data-facet="theme:{_esc(th.lower())}">#{_esc(th)}</button>' for th in themes)
+    facet_bar = (
+        '<div class="facets"><button class="facet-on" data-facet="all">all</button>'
+        '<span class="fg">source</span>'
+        '<button data-facet="key:today">dates</button>'
+        '<button data-facet="key:tasks">tasks</button>'
+        '<button data-facet="key:messages">mail</button>'
+        '<button data-facet="key:work">work</button>'
+        '<button data-facet="key:activity">activity</button>'
+        + (f'<span class="fg">theme</span>{theme_chips}' if theme_chips else "")
+        + '<span class="fg">context</span>'
+        '<button data-facet="context:personal">personal</button>'
+        '<button data-facet="context:work">work</button>'
+        '<button data-facet="context:case">case</button></div>'
+    )
+
     return (
         "<!doctype html><html lang=\"en\"><head>"
         "<meta charset=\"utf-8\">"
@@ -301,6 +339,7 @@ def _render_html(today: date) -> str:
         '<option value="3" selected>3</option><option value="4">4</option>'
         '<option value="5">5</option></select></label>'
         '</form>'
+        f'{facet_bar}'
         f'<div class="grid">{cards}</div>'
         '<footer>Central overview · CIDER is your focus space · private</footer>'
         f"</main><script>{_SCRIPT}</script></body></html>"
@@ -310,7 +349,10 @@ def _render_html(today: date) -> str:
 _STYLE = """
 :root{ --bg:#f4f6f8; --card:#fff; --ink:#19212b; --muted:#66707c; --line:#e4e8ec;
   --accent:#0f766e; --overdue:#a1553c; --today:#0f766e;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace; }
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  /* Subtle, muted domain hues — colour for meaning, never alarm/clash (DESIGN.md). */
+  --c-dates:#5b74b8; --c-tasks:#2f9e8f; --c-mail:#8a6bb0; --c-work:#c0894a;
+  --c-activity:#7c8592; --c-personal:#8a6bb0; --c-workctx:#c0894a; --c-case:#b46a54; }
 /* Auto dark (unless the user has explicitly chosen light) */
 @media (prefers-color-scheme:dark){ :root:not([data-theme=light]){ --bg:#0e1116; --card:#161b22;
   --ink:#e6e9ee; --muted:#8994a2; --line:#232a33; --accent:#2dd4bf; --overdue:#e8917a;
@@ -429,6 +471,31 @@ footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-
   border:1px solid var(--line); background:transparent; color:var(--muted); }
 .prefs button:hover{ color:var(--accent); border-color:var(--accent); }
 .next-step{ color:var(--accent); font-weight:600; }
+.facets{ display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; margin:0 0 1rem; }
+.facets .fg{ font:.6rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); margin-left:.5rem; }
+.facets button{ cursor:pointer; font-size:.82rem; padding:.25rem .65rem; border-radius:999px;
+  border:1px solid var(--line); background:transparent; color:var(--ink); }
+.facets button:hover{ border-color:var(--accent); color:var(--accent); }
+.facets button.facet-on{ background:var(--accent); color:var(--bg); border-color:var(--accent); }
+/* Subtle per-card domain colour: a thin coloured top edge + a tinted title. */
+.card[data-key=today]{ border-top:3px solid var(--c-dates); }
+.card[data-key=today] .ttl{ color:var(--c-dates); }
+.card[data-key=tasks]{ border-top:3px solid var(--c-tasks); }
+.card[data-key=tasks] .ttl{ color:var(--c-tasks); }
+.card[data-key=messages]{ border-top:3px solid var(--c-mail); }
+.card[data-key=messages] .ttl{ color:var(--c-mail); }
+.card[data-key=work]{ border-top:3px solid var(--c-work); }
+.card[data-key=work] .ttl{ color:var(--c-work); }
+.card[data-key=activity]{ border-top:3px solid var(--c-activity); }
+.card[data-key=activity] .ttl{ color:var(--c-activity); }
+/* Context chips carry their hue as a small dot. */
+.facets button[data-facet^="context:"]{ display:inline-flex; align-items:center; gap:.35rem; }
+.facets button[data-facet^="context:"]::before{ content:""; width:.5rem; height:.5rem;
+  border-radius:50%; background:var(--muted); }
+.facets button[data-facet="context:personal"]::before{ background:var(--c-personal); }
+.facets button[data-facet="context:work"]::before{ background:var(--c-workctx); }
+.facets button[data-facet="context:case"]::before{ background:var(--c-case); }
 """
 
 _SCRIPT = """
@@ -507,6 +574,46 @@ _SCRIPT = """
       var b=f.querySelector('button'); b.textContent='pulling…'; b.disabled=true;
     });
   });
+  // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
+  function applyFacet(f){
+    f=f||'all';
+    var cards=document.querySelectorAll('.grid .card');
+    cards.forEach(function(c){ c.style.display=''; });
+    document.querySelectorAll('.grid .task, .card[data-key="activity"] .row')
+      .forEach(function(el){ el.style.display=''; });
+    if(f!=='all'){
+      if(f.indexOf('key:')===0){
+        var k=f.slice(4);
+        cards.forEach(function(c){ c.style.display=(c.dataset.key===k)?'':'none'; });
+        var only=document.querySelector('.card[data-key="'+k+'"]');
+        if(only) only.classList.remove('collapsed');
+      } else {
+        var parts=f.split(':'), attr=parts[0], val=parts[1];   // theme:x | context:x
+        cards.forEach(function(c){
+          var k=c.dataset.key;
+          if(k==='tasks'||k==='activity'){ c.style.display=''; c.classList.remove('collapsed'); }
+          else c.style.display='none';
+        });
+        document.querySelectorAll('.card[data-key="tasks"] .task, .card[data-key="activity"] .row')
+          .forEach(function(el){ el.style.display=(el.dataset[attr]===val)?'':'none'; });
+      }
+    }
+    document.querySelectorAll('.card[data-key="tasks"] .sub').forEach(function(sub){
+      var ul=sub.nextElementSibling;
+      if(ul&&ul.classList.contains('tasks')){
+        var any=[].some.call(ul.querySelectorAll('.task'),function(t){return t.style.display!=='none';});
+        sub.style.display=any?'':'none';
+      }
+    });
+    document.querySelectorAll('.facets button').forEach(function(b){
+      b.classList.toggle('facet-on', b.dataset.facet===f); });
+    localStorage.setItem('pa-facet', f);
+  }
+  document.querySelectorAll('.facets button').forEach(function(b){
+    b.addEventListener('click', function(){ applyFacet(b.dataset.facet); }); });
+  var savedFacet=localStorage.getItem('pa-facet');
+  if(savedFacet && savedFacet!=='all') applyFacet(savedFacet);
+
   // Preferences (persisted): theme + text size. Individual variation is large (DESIGN.md).
   var root=document.documentElement;
   var savedTheme=localStorage.getItem('pa-theme');
