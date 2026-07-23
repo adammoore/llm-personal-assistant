@@ -27,6 +27,7 @@ from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.mailsummary import load_summary  # noqa: E402
 from lib.people import load_people, reconnect_due  # noqa: E402
+from lib.pins import load_pins  # noqa: E402
 from lib.people import upcoming_birthdays as people_birthdays  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
@@ -76,6 +77,25 @@ def _due_state(due: str | None, today: date) -> str:
     except ValueError:
         return "none"
     return "overdue" if d < today else "today" if d == today else "soon"
+
+
+# Loaded once per render (in _render_html) so item renderers can flag pinned state cheaply.
+_PINS: dict = {"task": [], "person": [], "message": []}
+
+
+def _is_pinned(kind: str, obj_id: str | int) -> bool:
+    return str(obj_id) in _PINS.get(kind, [])
+
+
+def _pin_btn(kind: str, obj_id: str | int, pinned: bool) -> str:
+    """A ★/☆ toggle that pins a task/person/message into the Priorities card."""
+    star = "★" if pinned else "☆"
+    cls = "pin on" if pinned else "pin"
+    title = "unpin" if pinned else "pin to priorities"
+    return (f'<form class="{cls}" method="post" action="/pin">'
+            f'<input type="hidden" name="kind" value="{kind}">'
+            f'<input type="hidden" name="id" value="{_esc(str(obj_id))}">'
+            f'<button title="{title}">{star}</button></form>')
 
 
 def _card(key: str, title: str, count: str, body: str, *, collapsed: bool = False) -> str:
@@ -199,6 +219,7 @@ def _task_li(t: dict, today: date) -> str:
         f'data-context="{_ctx(t.get("theme"), category)}" style="--accent:{accent}">'
         f'<div class="t-row"><span class="dot"></span>'
         f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
+        f'{_pin_btn("task", t["id"], _is_pinned("task", t["id"]))}'
         f'<button type="button" class="edit-btn" title="edit">✎</button>'
         f'<form class="mtd" method="post" action="/breakdown">'
         f'<input type="hidden" name="id" value="{t["id"]}">'
@@ -378,13 +399,15 @@ def _inbox_card() -> str:
     for m in items:
         col = _CTX_COLOR.get(m["context"], "#64748B")
         unread = ' data-unread="1"' if m.get("unread") else ""
+        mkey = m.get("key", "")
+        pin = _pin_btn("message", mkey, _is_pinned("message", mkey)) if mkey else ""
         rows.append(
             f'<li class="row irow" data-venue="{_esc(m["venue"])}" '
             f'data-context="{_esc(m["context"])}"{unread}>'
             f'<span class="when">{_esc(m.get("date") or "")}</span>'
             f'<span class="what"><span class="ivenue">{_esc(m["venue"])}</span> '
             f'<span class="ictx" style="color:{col}">{_esc(m["context"])}</span> '
-            f'<b>{_esc(m["who"])}</b> — {_esc(m["subject"])}</span></li>')
+            f'<b>{_esc(m["who"])}</b> — {_esc(m["subject"])}</span>{pin}</li>')
     at = _esc(data.get("at") or "")
     body = (chips("venue", "v") + chips("context", "c")
             + f'<ul class="rows inbox-rows">{"".join(rows)}</ul>'
@@ -463,27 +486,88 @@ def _people_card() -> str:
         rows = "".join(
             f'<li class="row person" data-person="{_esc(b["name"])}" role="button" tabindex="0">'
             f'<span class="when">{b["in_days"]}d</span>'
-            f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
+            f'<span class="what">🎂 {_esc(b["name"])}</span>'
+            f'{_pin_btn("person", b["name"], _is_pinned("person", b["name"]))}</li>'
+            for b in bdays)
         blocks.append(f'<div class="sub">birthdays</div><ul class="rows">{rows}</ul>')
     recon = reconnect_due(days=30)[:6]
     if recon:
         rows = "".join(
             f'<li class="row person" data-person="{_esc(r["name"])}" role="button" tabindex="0">'
             f'<span class="when">{r["days"]}d</span>'
-            f'<span class="what">{_esc(r["name"])}</span></li>' for r in recon)
+            f'<span class="what">{_esc(r["name"])}</span>'
+            f'{_pin_btn("person", r["name"], _is_pinned("person", r["name"]))}</li>'
+            for r in recon)
         blocks.append(f'<div class="sub">not heard from</div><ul class="rows">{rows}</ul>')
-    # All tracked people (so any of them can be clicked to open their thread).
+    # All tracked people — each a pin toggle + a chip that opens their thread.
     everyone = sorted(load_people(), key=lambda p: p.get("name", ""))
     chips = "".join(
+        f'<span class="pchip-wrap">'
+        f'{_pin_btn("person", p["name"], _is_pinned("person", p["name"]))}'
         f'<button class="person-chip" data-person="{_esc(p["name"])}">{_esc(p["name"])}</button>'
-        for p in everyone)
+        f'</span>' for p in everyone)
     blocks.append(f'<div class="sub">everyone</div><div class="people-chips">{chips}</div>')
     if not bdays and not recon:
         blocks.append(f'<p class="empty sm">{total} people tracked — nothing needs you.</p>')
     return _card("people", "People", str(total), "".join(blocks), collapsed=True)
 
 
+def _priorities_card(today: date) -> str:
+    """The main view: everything Adam has explicitly pinned — tasks, people, messages — together.
+
+    Explicit prioritisation that overrides derived urgency: whatever he stars lands here, at the
+    top, uncollapsed. Empty until he pins something, with a one-line hint on how.
+    """
+    pins = _PINS
+    blocks = []
+
+    pinned_tasks = [t for t in load_tasks()
+                    if not t.get("completed") and str(t["id"]) in pins["task"]]
+    if pinned_tasks:
+        rows = "".join(
+            f'<li class="row"><span class="what">◇ {_esc(t["title"])}'
+            + (f' <span class="due due-{_due_state(t.get("due_date"), today)}">'
+               f'{_esc(t["due_date"])}</span>' if t.get("due_date") else "")
+            + f'</span>{_pin_btn("task", t["id"], True)}</li>' for t in pinned_tasks)
+        blocks.append(f'<div class="sub">tasks</div><ul class="rows">{rows}</ul>')
+
+    if pins["person"]:
+        rows = "".join(
+            f'<li class="row person" data-person="{_esc(name)}" role="button" tabindex="0">'
+            f'<span class="what">◈ {_esc(name)}</span>'
+            f'{_pin_btn("person", name, True)}</li>' for name in pins["person"])
+        blocks.append(f'<div class="sub">people</div><ul class="rows">{rows}</ul>')
+
+    if pins["message"]:
+        try:
+            msgs = {m.get("key"): m for m in
+                    json.loads(_INBOX_CACHE.read_text(encoding="utf-8")).get("items", [])}
+        except (OSError, ValueError):
+            msgs = {}
+        rows = ""
+        for k in pins["message"]:
+            m = msgs.get(k)
+            if not m:
+                continue
+            col = _CTX_COLOR.get(m["context"], "#64748B")
+            rows += (f'<li class="row"><span class="what">✉ '
+                     f'<span class="ictx" style="color:{col}">{_esc(m["context"])}</span> '
+                     f'<b>{_esc(m["who"])}</b> — {_esc(m["subject"])}</span>'
+                     f'{_pin_btn("message", k, True)}</li>')
+        if rows:
+            blocks.append(f'<div class="sub">messages</div><ul class="rows">{rows}</ul>')
+
+    n = sum(len(pins[k]) for k in pins)
+    if not blocks:
+        body = ('<p class="empty sm">Nothing pinned yet. Tap the ☆ on any task, person, or '
+                'message to prioritise it here — your hand-picked main view.</p>')
+        return _card("priorities", "Priorities", "", body)
+    return _card("priorities", "Priorities", str(n), "".join(blocks))
+
+
 def _render_html(today: date) -> str:
+    global _PINS
+    _PINS = load_pins()
     tasks = load_tasks()
     open_tasks = [t for t in tasks if not t.get("completed")]
     done_tasks = [t for t in tasks if t.get("completed")]
@@ -523,7 +607,7 @@ def _render_html(today: date) -> str:
              f'<span class="n">{_esc(next_mtg)}</span><span class="l">next</span></button>')
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
-    cards = (_today_card(today) + _tasks_card(today, open_tasks)
+    cards = (_priorities_card(today) + _today_card(today) + _tasks_card(today, open_tasks)
              + _messages_card(worth_by_acct) + _inbox_card() + _work_card()
              + _reminders_card() + _people_card() + _activity_card())
 
@@ -578,10 +662,6 @@ def _render_html(today: date) -> str:
         '<select name="priority"><option value="high">high</option>'
         '<option value="normal" selected>normal</option><option value="low">low</option></select>'
         '<button>Add</button>'
-        '<label class="spice" title="✨ breakdown detail (goblin.tools spiciness)">🌶'
-        '<select id="spice"><option value="1">1</option><option value="2">2</option>'
-        '<option value="3" selected>3</option><option value="4">4</option>'
-        '<option value="5">5</option></select></label>'
         '</form>'
         f'{facet_bar}'
         '<div id="thread" class="thread" hidden></div>'
@@ -689,6 +769,17 @@ main{ max-width:1100px; margin:0 auto; }
 .irow .ictx{ font:.62rem/1 var(--mono); text-transform:uppercase; letter-spacing:.04em; }
 .irow[data-unread="1"] b{ color:var(--fg); }
 .inbox-rows{ max-height:22rem; overflow-y:auto; }
+/* Explicit prioritisation: ★ pin toggle + the Priorities main-view card */
+.pin{ display:inline-flex; margin:0; }
+.pin button{ background:none; border:none; cursor:pointer; color:var(--muted);
+  font-size:.95rem; line-height:1; padding:0 .18rem; opacity:.55; }
+.pin button:hover{ opacity:1; color:#E0A500; }
+.pin.on button{ color:#E0A500; opacity:1; }
+.pchip-wrap{ display:inline-flex; align-items:center; gap:.05rem; }
+.irow .pin, .row .pin{ flex:0 0 auto; margin-left:auto; }
+.card[data-key=priorities]{ border-color:#E0A500; }
+.card[data-key=priorities] .ttl{ color:#B8860B; }
+.card[data-key=priorities] .cnt{ background:#E0A500; color:#3a2c00; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -849,11 +940,9 @@ _SCRIPT = """
       if(f) f.hidden=!f.hidden;
     });
   });
-  // ✨ Magic ToDo: carry the chosen spiciness into each breakdown, show it's working.
+  // ✨ Magic ToDo: break a task into steps (fixed sensible detail), show it's working.
   document.querySelectorAll('.mtd').forEach(function(f){
     f.addEventListener('submit', function(){
-      var sp=document.getElementById('spice');
-      if(sp) f.querySelector('.spice-in').value=sp.value;
       var b=f.querySelector('button'); b.textContent='…'; b.disabled=true;
     });
   });

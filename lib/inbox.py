@@ -19,6 +19,7 @@ the dashboard's existing _ctx approach. Read-only: this only reads what lib.comm
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -116,9 +117,17 @@ def _imessage_messages(days: int, limit: int) -> list[dict]:
     return out
 
 
+def _key(m: dict) -> str:
+    """Stable short id for a message so it can be pinned/referenced across rebuilds."""
+    raw = f'{m["venue_id"]}|{m.get("date")}|{m["who"]}|{m["subject"]}'
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
 def unified(mail_limit: int = 25, imessage_days: int = 14, imessage_limit: int = 40) -> list[dict]:
-    """The whole stream, newest first: [{venue, venue_id, channel, context, who, subject, text, date, unread}]."""
+    """The whole stream, newest first: [{key, venue, venue_id, channel, context, who, subject, text, date, unread}]."""
     msgs = _mail_messages(mail_limit) + _imessage_messages(imessage_days, imessage_limit)
+    for m in msgs:
+        m["key"] = _key(m)
     msgs.sort(key=lambda m: m.get("date") or "", reverse=True)
     return msgs
 

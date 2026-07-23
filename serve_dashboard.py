@@ -26,6 +26,8 @@ sys.path.insert(0, str(REPO))
 from lib.magictodo import breakdown  # noqa: E402
 from lib.mailsummary import summarize as summarize_inbox  # noqa: E402
 from lib.people import seed_from_mail  # noqa: E402
+from lib.pins import KINDS as PIN_KINDS  # noqa: E402
+from lib.pins import toggle_pin  # noqa: E402
 from lib.taskstore import (  # noqa: E402
     CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, delete_task, load_tasks,
     set_steps, update_task,
@@ -102,6 +104,13 @@ class Handler(BaseHTTPRequestHandler):
                         "theme": first("theme"), "priority": first("priority"),
                         "energy": first("energy"), "due_date": first("due"),
                     })
+                    _rebuild()
+            elif path == "/pin":
+                # Toggle an explicit priority pin on a task / person / message, then rebuild.
+                kind = first("kind")
+                obj_id = first("id")
+                if kind in PIN_KINDS and obj_id:
+                    toggle_pin(kind, obj_id)
                     _rebuild()
             elif path == "/refresh":
                 # Refresh local mirrors (Apple Reminders ~0.1s; unified inbox = mail fetch),
