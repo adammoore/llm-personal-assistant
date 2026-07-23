@@ -304,14 +304,24 @@ def _people_card() -> str:
     blocks = [btn]
     bdays = people_birthdays(days=45)
     if bdays:
-        rows = "".join(f'<li class="row"><span class="when">{b["in_days"]}d</span>'
-                       f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
+        rows = "".join(
+            f'<li class="row person" data-person="{_esc(b["name"])}" role="button" tabindex="0">'
+            f'<span class="when">{b["in_days"]}d</span>'
+            f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
         blocks.append(f'<div class="sub">birthdays</div><ul class="rows">{rows}</ul>')
     recon = reconnect_due(days=30)[:6]
     if recon:
-        rows = "".join(f'<li class="row"><span class="when">{r["days"]}d</span>'
-                       f'<span class="what">{_esc(r["name"])}</span></li>' for r in recon)
+        rows = "".join(
+            f'<li class="row person" data-person="{_esc(r["name"])}" role="button" tabindex="0">'
+            f'<span class="when">{r["days"]}d</span>'
+            f'<span class="what">{_esc(r["name"])}</span></li>' for r in recon)
         blocks.append(f'<div class="sub">not heard from</div><ul class="rows">{rows}</ul>')
+    # All tracked people (so any of them can be clicked to open their thread).
+    everyone = sorted(load_people(), key=lambda p: p.get("name", ""))
+    chips = "".join(
+        f'<button class="person-chip" data-person="{_esc(p["name"])}">{_esc(p["name"])}</button>'
+        for p in everyone)
+    blocks.append(f'<div class="sub">everyone</div><div class="people-chips">{chips}</div>')
     if not bdays and not recon:
         blocks.append(f'<p class="empty sm">{total} people tracked — nothing needs you.</p>')
     return _card("people", "People", str(total), "".join(blocks), collapsed=True)
@@ -417,6 +427,7 @@ def _render_html(today: date) -> str:
         '<option value="5">5</option></select></label>'
         '</form>'
         f'{facet_bar}'
+        '<div id="thread" class="thread" hidden></div>'
         f'<div class="grid">{cards}</div>'
         '<footer>Central overview · CIDER is your focus space · private</footer>'
         f"</main><script>{_SCRIPT}</script></body></html>"
@@ -591,6 +602,18 @@ body.spatial .task[data-context=work]{ border-left-color:var(--c-workctx); }
 body.spatial .task[data-context=case]{ border-left-color:var(--c-case); }
 body.spatial .task[data-priority=high] .t-body{ font-weight:650; font-size:1.03rem; }
 body.spatial .task[data-priority=low] .t-body{ color:var(--muted); font-size:.9rem; }
+/* Person-as-a-thread: click a person to filter everything to items involving them. */
+.person{ cursor:pointer; }
+.person:hover .what{ color:var(--c-people); }
+.people-chips{ display:flex; flex-wrap:wrap; gap:.3rem; }
+.person-chip{ cursor:pointer; font-size:.78rem; padding:.2rem .5rem; border-radius:999px;
+  border:1px solid var(--line); background:transparent; color:var(--ink); }
+.person-chip:hover{ border-color:var(--c-people); color:var(--c-people); }
+.thread{ display:flex; align-items:center; gap:.5rem; margin:0 0 .9rem; padding:.4rem .7rem;
+  border:1px solid var(--c-people); border-radius:10px; background:var(--card); font-size:.9rem; }
+.thread b{ color:var(--c-people); }
+.thread button{ cursor:pointer; margin-left:auto; font-size:.78rem; padding:.2rem .55rem;
+  border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--muted); }
 """
 
 _SCRIPT = """
@@ -717,6 +740,44 @@ _SCRIPT = """
     b.addEventListener('click', function(){ applyFacet(b.dataset.facet); }); });
   var savedFacet=localStorage.getItem('pa-facet');
   if(savedFacet && savedFacet!=='all') applyFacet(savedFacet);
+
+  // Person-as-a-thread — click a person to show everything involving them (ZigZag payoff).
+  function clearThread(){
+    var th=document.getElementById('thread'); if(th){ th.hidden=true; th.innerHTML=''; }
+    applyFacet('all');
+  }
+  function focusPerson(name){
+    var n=(name||'').toLowerCase(); if(!n) return;
+    var cards=document.querySelectorAll('.grid .card');
+    cards.forEach(function(c){ c.style.display=''; c.classList.remove('collapsed'); });
+    cards.forEach(function(c){
+      if(c.dataset.key==='people') return;          // keep People visible to pick another
+      var visible=false;
+      c.querySelectorAll('.row, .task').forEach(function(el){
+        var m=el.textContent.toLowerCase().indexOf(n)!==-1;
+        el.style.display=m?'':'none'; if(m) visible=true;
+      });
+      c.querySelectorAll('.sub').forEach(function(sub){
+        var sib=sub.nextElementSibling;
+        if(sib && (sib.classList.contains('rows')||sib.classList.contains('tasks'))){
+          var any=[].some.call(sib.querySelectorAll('.row,.task'),
+            function(x){return x.style.display!=='none';});
+          sub.style.display=any?'':'none';
+        }
+      });
+      c.style.display=visible?'':'none';
+    });
+    var th=document.getElementById('thread');
+    if(th){ th.hidden=false;
+      th.innerHTML='👤 <b></b> — everything involving them <button class="clear-thread">clear</button>';
+      th.querySelector('b').textContent=name;
+      th.querySelector('.clear-thread').addEventListener('click', clearThread); }
+    document.querySelectorAll('.facets button').forEach(function(b){ b.classList.remove('facet-on'); });
+  }
+  document.querySelectorAll('[data-person]').forEach(function(el){
+    el.addEventListener('click', function(){ focusPerson(el.dataset.person); });
+    el.addEventListener('keydown', function(e){ if(e.key==='Enter') focusPerson(el.dataset.person); });
+  });
 
   // Preferences (persisted): theme + text size. Individual variation is large (DESIGN.md).
   var root=document.documentElement;
