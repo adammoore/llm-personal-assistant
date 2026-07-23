@@ -23,7 +23,39 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from lib.cdp import is_up, read_best  # noqa: E402
+import re  # noqa: E402
+
+from lib.cdp import evaluate, find, is_up, read_best  # noqa: E402
+
+# Outlook calendar events live in aria-labels like:
+#   "Family court, 10:00 to 11:00, Wednesday, July 22, 2026, Busy"
+_EVENT_RE = re.compile(r"^(.*?), (\d{1,2}:\d{2}) to \d{1,2}:\d{2}, \w+, (\w+ \d{1,2}, \d{4})")
+
+
+def calendar_events() -> list[dict]:
+    """Structured Westminster calendar events from the Outlook tab: [{title, start, date}]."""
+    t = find("outlook.cloud.microsoft/calendar")
+    if not t:
+        return []
+    expr = ("(function(){var o=[],s={},e=document.querySelectorAll('[aria-label]');"
+            "for(var i=0;i<e.length;i++){var a=e[i].getAttribute('aria-label')||'';"
+            "if(/\\d{1,2}:\\d{2} to \\d{1,2}:\\d{2},/.test(a)&&!s[a]){s[a]=1;o.push(a);}}"
+            "return o.join(String.fromCharCode(10));})()")
+    raw = evaluate(t, expr) or ""
+    events = []
+    for line in raw.splitlines():
+        m = _EVENT_RE.match(line.strip())
+        if not m:
+            continue
+        title, start, datestr = m.group(1).strip(), m.group(2), m.group(3)
+        try:
+            iso = datetime.strptime(datestr, "%B %d, %Y").date().isoformat()
+        except ValueError:
+            continue
+        if title and title != ".":       # OOF/blank placeholders show as "."
+            events.append({"title": title, "start": start, "date": iso})
+    events.sort(key=lambda e: (e["date"], e["start"]))
+    return events
 
 # Where the dashboard reads a compact snapshot of the work surfaces from (see --cache).
 CACHE_PATH = REPO / "data" / "work_cache.json"
@@ -78,13 +110,20 @@ def write_cache(path: Path = CACHE_PATH) -> dict:
             "sources": [],
         }
     else:
+        events = calendar_events()
         sources = []
         for src in SOURCES:
-            text = read_best(src["url"], src["selectors"])
-            # Trim to a compact snippet; empty tab (not open) becomes an empty string.
-            snippet = (text or "").strip()[:1200]
+            if src["id"] == "calendar":
+                # The week-grid innerText is just axis labels ("20 Mon … 0 1 2 3"), useless.
+                # Render the structured events instead so the Work card shows real meetings.
+                snippet = "\n".join(f"{e['date']} {e['start']}  {e['title']}"
+                                    for e in events[:20]) or "(no events read)"
+            else:
+                text = read_best(src["url"], src["selectors"])
+                # Trim to a compact snippet; empty tab (not open) becomes an empty string.
+                snippet = (text or "").strip()[:1200]
             sources.append({"id": src["id"], "label": src["label"], "text": snippet})
-        data = {"at": now, "up": True, "sources": sources}
+        data = {"at": now, "up": True, "sources": sources, "calendar_events": events}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return data

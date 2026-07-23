@@ -1,0 +1,73 @@
+{
+  "at": "2026-07-23T08:21:08",
+  "up": true,
+  "sources": [
+    {
+      "id": "mail",
+      "label": "Outlook \u2014 mail",
+      "text": "Inbox\n\uf109\n\uefa1\n\ue0c9\n\ue88f\n\ue14b\n\ue480\nYesterday\n\uec32\n\ue73e\nVanessa Longden\nEnact development\nWed 11:46\nYou don't often get email from v.longden@mmu.ac.uk. Learn why this is important CAUTION: This email originated from outside of the University. Do not click on any links, scan any QR codes, open attachments or take any action unless you trust the sender a\u2026\nR\nRajat Shah, Matt Galton, +1 other\nUniversity of Westminster Weekly Digest\nWed 09:26\nCAUTION: This email originated from outside of the University. Do not click on any links, scan any QR codes, open attachments or take any action unless you trust the sender and know the content is safe. New posts from University of Westminster \u034f \u034f \u034f\u2026\n\ue488\nJE\nJenny Evans; Rory McNicholl\n\ue135\nFile types\nWed 09:00\nThank you for your email. I am now out of the office on annual leave until Thursday 23 July and I will response when I return. Kind regards, Jenny Jenny Evans | Research Environment and Scholarly Communications Lead | PI & Project Lead: Enact\u2026\n\ue480\nThis week\n\uec32\nJE\nJenny Evans\nJust to follow up on my feedback re the email to participants\nTue 17:32\nThe next workshop piece is Phase 3 User Experience Discovery: Visual design iterations with community stakeholders, accessibility "
+    },
+    {
+      "id": "calendar",
+      "label": "Outlook \u2014 calendar",
+      "text": "2026-07-21 10:00  JE/AVM/VB weekly catch-up\n2026-07-22 10:00  Family court\n2026-07-22 15:30  RDA GORC II WG - MaLDReTH Task Force\n2026-07-23 09:15  Enact licensing discussions\n2026-07-23 10:00  Enact weekly catch up\n2026-07-23 10:30  CoSector Enact weekly call - new invitation\n2026-07-23 10:45  JE/AVM/VB weekly catch-up\n2026-07-23 16:00  Weekly Notch8 update / Enact feedback\n2026-07-23 17:30  Weekly Enact core team catch-up"
+    },
+    {
+      "id": "teams",
+      "label": "Teams",
+      "text": "University of Westminster\nAM\nActivity\nChat\nTeams\nCalendar\nCalls\nOneDrive\nApps\nHas context menu\nChat\nUnread\nChats\nMeeting chats\nQuick views\nMentions\nDrafts\nFavourites\nAdam Vials Moore (You)\nChats\nJenny Evans\n21/07\nYou: yes\nSchol Comms & Enact\n17/07\nJenny: I'm also looking at two weeks off at the end of August/beginning of September.\nVictoria Burgher\n17/07\nYou: you're right - it should go to all pathfinders - sorry - that's just me being grumpy\u2026\nWeekly Notch8 update / Enact feedback\n16/07\nRecording is ready\nJE/AVM/VB weekly catch-up\n16/07\nVictoria: ok\nSarah Stewart\n14/07\nWill be meeting with Jenny tomorrow, so will hopefully have more info then as well!\nJE/AVM/VB weekly catch-up\n14/07\nYou: like a client list is valuable to sales people? I didn't quite understand that relat\u2026\nEnact Team Chat\n14/07\nJenny: Updates: Buried in the new UKRI strategy announcement yesterday- the research data p\u2026\nEnact Pathfinders Update Session\n10/07\nRecording is ready\nWilliam Mclean\n10/07\nYou: hope it makes sense of what you gave us!\nCapturing initial Researcher encounter and feedback\n10/07\nRecording is ready\nJenny, Neal and Victoria\n08/07\nYou: Recap: HOLD: System access 8 July | Meeting | Microsoft Teams\nHO"
+    },
+    {
+      "id": "slack",
+      "label": "Slack (Notch8)",
+      "text": "Describe what you are looking for\nHome\n1\nDMs\n2\nActivity\n3\nFiles\n4\nMore\n0\nNotch8\nThreads\nHuddles\nDirectories\nStarred\nDrag and drop important stuff here\nChannels\nn8-pri-enact\nDirect messages\nn8-pri-enact\n12\nMessages\nAdd canvas\nFiles & links\nCanvas\nList\nFolder\nThursday, July 16th\nNick\n\u00a0\u00a06:25 AM\n\nAhead of tomorrow's session:\nUpdates:\n\n[Kirk] Demo of Ramp as an alternate A/V player\n[LaRita] Demo first pass of the guided deposit flow.\nFuture implications for editing works and general usability thereabouts\nNeeds:\n\nRory, we'd like your call on hiding User Collections from non-admins (PR #101) so we can merge it.\n[Shana / LaRita] Design review of Draft workflows\nAgenda is in the running notes doc; add anything you want covered.\nGoogle Docs\nPRI Enact Running Meeting Notes\nDocument in Google Docs\nOpen in Google Docs\nAs of Thursday at 6:25 AM\nRefresh\nPreview\n1\n1 reply\n7 days ago\nView thread\nMonday, July 20th\nRory McNicholl\n\u00a0\u00a04:37 PM\n\nHi Folks can we add @Eleanor Dumbill to this channel? We can remove her from private channel Thanks!\n1\n1\n3 replies\nLast reply 3 days ago\nView thread\nEleanor Dumbill\n\u00a0\u00a04:39 PM\nwas added to #n8-pri-enact by \nNick\n.\n\n\n\n\nMessage n8-pri-enact\nShift + Return to add a ne"
+    }
+  ],
+  "calendar_events": [
+    {
+      "title": "JE/AVM/VB weekly catch-up",
+      "start": "10:00",
+      "date": "2026-07-21"
+    },
+    {
+      "title": "Family court",
+      "start": "10:00",
+      "date": "2026-07-22"
+    },
+    {
+      "title": "RDA GORC II WG - MaLDReTH Task Force",
+      "start": "15:30",
+      "date": "2026-07-22"
+    },
+    {
+      "title": "Enact licensing discussions",
+      "start": "09:15",
+      "date": "2026-07-23"
+    },
+    {
+      "title": "Enact weekly catch up",
+      "start": "10:00",
+      "date": "2026-07-23"
+    },
+    {
+      "title": "CoSector Enact weekly call - new invitation",
+      "start": "10:30",
+      "date": "2026-07-23"
+    },
+    {
+      "title": "JE/AVM/VB weekly catch-up",
+      "start": "10:45",
+      "date": "2026-07-23"
+    },
+    {
+      "title": "Weekly Notch8 update / Enact feedback",
+      "start": "16:00",
+      "date": "2026-07-23"
+    },
+    {
+      "title": "Weekly Enact core team catch-up",
+      "start": "17:30",
+      "date": "2026-07-23"
+    }
+  ]
+}

@@ -86,6 +86,15 @@ def _card(key: str, title: str, count: str, body: str, *, collapsed: bool = Fals
             f'<div class="card-b">{body}</div></section>')
 
 
+def _work_events_for(day_iso: str) -> list[dict]:
+    """Westminster Outlook events for a given ISO day, from the work-pull cache."""
+    try:
+        data = json.loads(_WORK_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [e for e in data.get("calendar_events", []) if e.get("date") == day_iso]
+
+
 def _today_card(today: date) -> str:
     blocks, total = [], 0
     for acct in ACCOUNTS:
@@ -98,6 +107,14 @@ def _today_card(today: date) -> str:
             f'<li class="row"><span class="when">{_esc(e["when"])}</span>'
             f'<span class="what">{_esc(e["title"])}</span></li>' for e in evs)
         blocks.append(f'<div class="sub">{_esc(acct["id"])}</div><ul class="rows">{rows}</ul>')
+    # Westminster (Outlook) events come from the work-pull cache, not gog/Google calendars.
+    work_evs = _work_events_for(today.isoformat())
+    if work_evs:
+        total += len(work_evs)
+        rows = "".join(
+            f'<li class="row"><span class="when">{_esc(e["start"])}</span>'
+            f'<span class="what">{_esc(e["title"])}</span></li>' for e in work_evs)
+        blocks.append(f'<div class="sub">westminster</div><ul class="rows">{rows}</ul>')
     body = "".join(blocks) or '<p class="empty">Nothing scheduled.</p>'
     return _card("today", "Today", str(total) if total else "", body)
 
@@ -278,9 +295,17 @@ def _work_card() -> str:
         return _card("work", "Work (Westminster)", "", body, collapsed=True)
 
     sources = [s for s in (data.get("sources") or []) if isinstance(s, dict)]
+    cal_evs = data.get("calendar_events") or []
     rows = []
     for src in sources:
         label = src.get("label") or "Work"
+        if src.get("id") == "calendar" and cal_evs:
+            # Render real events as a list, not a truncated one-line snippet.
+            lis = "".join(
+                f'<li class="row"><span class="when">{_esc(e["date"][5:])} {_esc(e["start"])}</span>'
+                f'<span class="what">{_esc(e["title"])}</span></li>' for e in cal_evs[:12])
+            rows.append(f'<div class="sub">{_esc(label)}</div><ul class="rows">{lis}</ul>')
+            continue
         text = (src.get("text") or "").strip()
         snippet = " ".join(text.split())[:120] if text else "(tab not open)"
         rows.append(f'<div class="sub">{_esc(label)}</div>'
