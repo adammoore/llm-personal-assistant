@@ -33,7 +33,8 @@ from lib.state import (  # noqa: E402
     already_nudged, load_state, mark_retracted, pending_mail_nudges, rate_state,
     record_mail_nudge, record_nudge, repo_root, save_state,
 )
-from lib.taskstore import load_tasks  # noqa: E402
+from lib.imessage import captures as imessage_captures  # noqa: E402
+from lib.taskstore import add_task, load_tasks  # noqa: E402
 
 # Defaults (mirrored in autonomy.yaml `monitor:` for documentation).
 IMMINENT_MIN = 15          # calendar: warn this many minutes ahead
@@ -264,19 +265,43 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
     return True
 
 
+def capture_imessage(state: dict, *, dry: bool) -> list[str]:
+    """Phone capture: self-sent iMessages prefixed 'todo/pa/capture/task …' become tasks."""
+    last = state.get("last_imessage_rowid", 0)
+    caps, top = imessage_captures(last)
+    state["last_imessage_rowid"] = top
+    done = []
+    for c in caps:
+        text = c.get("text", "").strip()
+        if not text:
+            continue
+        if not dry:
+            add_task(text, source="imessage")
+        done.append(text)
+    return done
+
+
 def cycle(state: dict, now: datetime, *, dry: bool) -> dict:
     """One monitor pass. Returns a small report for logging/tests."""
     present: dict[str, set] = {}   # {account_id: current inbox ids} — feeds retraction
     events = (watch_mail(state, present) + watch_calendar(state, now)
               + watch_deadlines(state, now))
-    # First run: seed silently so we don't nudge about everything that already exists.
+    # First run: seed silently so we don't nudge about everything that already exists
+    # (and set the iMessage baseline so history isn't captured).
     if not state.get("seeded"):
         state["seeded"] = True
+        state["last_imessage_rowid"] = imessage_captures(0)[1]
         return {"seeded": True, "events": len(events), "sent": []}
+    captured = capture_imessage(state, dry=dry)
     sent = react(state, events, now, dry=dry)
     retracted = retract_stale(state, present, now, dry=dry)
     refreshed = _refresh_surfaces(state, now, dry=dry)
-    return {"seeded": False, "events": len(events), "sent": sent,
+    if captured and not dry:
+        # rebuild the dashboard now so the new task shows, and confirm on Signal.
+        subprocess.run(["python3", str(repo_root() / "build_pa_dashboard.py")],
+                       check=False, capture_output=True, timeout=60)
+        _send(f"✓ captured {len(captured)}: " + "; ".join(captured)[:90])
+    return {"seeded": False, "events": len(events), "sent": sent, "captured": captured,
             "refreshed": refreshed, "retracted": retracted}
 
 
@@ -302,10 +327,14 @@ def main(argv: list[str]) -> int:
                 print(f"{stamp}  seeded ({report['events']} items recorded, no nudges)")
             else:
                 retracted = report.get("retracted", [])
+                captured = report.get("captured", [])
                 print(f"{stamp}  events={report['events']} sent={len(report['sent'])}"
-                      f" retracted={len(retracted)} refreshed={report.get('refreshed')}")
+                      f" captured={len(captured)} retracted={len(retracted)}"
+                      f" refreshed={report.get('refreshed')}")
                 for s in report["sent"]:
                     print(f"    → {s}")
+                for c in captured:
+                    print(f"    ⌨ captured: {c}")
                 for k in retracted:
                     print(f"    ↩ retracted {k}")
         except Exception as exc:  # noqa: BLE001 — the loop must survive any single-cycle error
