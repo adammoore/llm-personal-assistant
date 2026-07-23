@@ -104,7 +104,9 @@ class Handler(BaseHTTPRequestHandler):
                     })
                     _rebuild()
             elif path == "/refresh":
-                # Rebuild the dashboard HTML from current data, then redirect back.
+                # Refresh the fast local mirrors (Apple Reminders ~0.1s), then rebuild the HTML.
+                subprocess.run(["python3", str(REPO / "lib" / "reminders.py")],
+                               check=False, capture_output=True, timeout=30)
                 _rebuild()
             elif path == "/pull-work":
                 # Read the open Enact work tabs into data/work_cache.json, then rebuild.

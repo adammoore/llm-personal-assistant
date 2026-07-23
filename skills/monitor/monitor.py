@@ -257,6 +257,10 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
             pass
     if not dry:
         root = repo_root()
+        # Refresh the Apple Reminders mirror (fast, ~0.1s) before rebuilding so the dashboard
+        # reflects anything captured via Siri / the Reminders app / the WhatsApp agent.
+        subprocess.run(["python3", str(root / "lib/reminders.py")],
+                       check=False, capture_output=True, timeout=30)
         subprocess.run(["python3", str(root / "build_pa_dashboard.py")],
                        check=False, capture_output=True, timeout=60)
         subprocess.run(["python3", str(root / "skills/checkin-daily/push_today.py")],

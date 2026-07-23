@@ -38,6 +38,8 @@ _ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢
 
 # The work-pull cache (skills/work-pull/pull.py --cache) drives the Work (Westminster) card.
 _WORK_CACHE = Path(__file__).resolve().parent / "data" / "work_cache.json"
+# Apple Reminders mirror (lib/reminders.py write_cache) — open reminders from Siri/app/WhatsApp.
+_REMIND_CACHE = Path(__file__).resolve().parent / "data" / "reminders_cache.json"
 
 
 # Context is derived (a predictable lens, not a per-item field) — see DESIGN.md / ADR-003.
@@ -95,6 +97,15 @@ def _work_events_for(day_iso: str) -> list[dict]:
     return [e for e in data.get("calendar_events", []) if e.get("date") == day_iso]
 
 
+def _reminders() -> list[dict]:
+    """Open Apple Reminders from the mirror cache (lib/reminders.py write_cache)."""
+    try:
+        data = json.loads(_REMIND_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return data.get("items", []) if data.get("ok") else []
+
+
 def _today_card(today: date) -> str:
     blocks, total = [], 0
     for acct in ACCOUNTS:
@@ -115,6 +126,15 @@ def _today_card(today: date) -> str:
             f'<li class="row"><span class="when">{_esc(e["start"])}</span>'
             f'<span class="what">{_esc(e["title"])}</span></li>' for e in work_evs)
         blocks.append(f'<div class="sub">westminster</div><ul class="rows">{rows}</ul>')
+    # Reminders due today or overdue (Apple Reminders mirror).
+    tstr = today.isoformat()
+    due_rem = [r for r in _reminders() if r.get("due") and r["due"][:10] <= tstr]
+    if due_rem:
+        total += len(due_rem)
+        rows = "".join(
+            f'<li class="row"><span class="when">{_esc((r["due"][:10]))}</span>'
+            f'<span class="what">{_esc(r["title"])}</span></li>' for r in due_rem)
+        blocks.append(f'<div class="sub">reminders due</div><ul class="rows">{rows}</ul>')
     body = "".join(blocks) or '<p class="empty">Nothing scheduled.</p>'
     return _card("today", "Today", str(total) if total else "", body)
 
@@ -317,6 +337,36 @@ def _work_card() -> str:
     return _card("work", "Work (Westminster)", count, body, collapsed=True)
 
 
+def _reminders_card() -> str:
+    """Apple Reminders — open items mirrored from Siri / the Reminders app / the WhatsApp agent.
+
+    This is the phone-capture surface: anything you tell Siri, add in the Reminders app, or send
+    the WhatsApp assistant lands here. The PA reads it (read-only) so it shows up in one view.
+    """
+    try:
+        data = json.loads(_REMIND_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    if not data:
+        body = ('<p class="empty sm">No reminders snapshot yet — the monitor refreshes this, '
+                'or run <code>python3 lib/reminders.py</code>.</p>')
+        return _card("reminders", "Reminders", "", body, collapsed=True)
+    if not data.get("ok"):
+        note = data.get("note") or "Reminders not readable."
+        return _card("reminders", "Reminders", "", f'<p class="empty sm">{_esc(note)}</p>',
+                     collapsed=True)
+    items = data.get("items", [])
+    if not items:
+        return _card("reminders", "Reminders", "",
+                     '<p class="empty sm">No open reminders. 🎉</p>', collapsed=True)
+    rows = "".join(
+        f'<li class="row"><span class="when">{_esc(it["due"][:10]) if it.get("due") else "—"}</span>'
+        f'<span class="what">{_esc(it["title"])}</span></li>' for it in items)
+    at = _esc(data.get("at") or "")
+    body = f'<ul class="rows">{rows}</ul>' + (f'<div class="sum-at">as of {at}</div>' if at else "")
+    return _card("reminders", "Reminders", str(len(items)), body, collapsed=True)
+
+
 def _people_card() -> str:
     """People — reconnect nudges + upcoming birthdays from the local people store."""
     total = len(load_people())
@@ -393,7 +443,8 @@ def _render_html(today: date) -> str:
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
-             + _messages_card(worth_by_acct) + _work_card() + _people_card() + _activity_card())
+             + _messages_card(worth_by_acct) + _work_card() + _reminders_card()
+             + _people_card() + _activity_card())
 
     # Facet bar — one calm row, one active facet at a time, each pivot single-focus (DESIGN.md).
     themes = sorted({t["theme"] for t in open_tasks if t.get("theme")})
