@@ -26,8 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.activity import unified  # noqa: E402
 from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
 from lib.mailsummary import load_summary  # noqa: E402
-from lib.monica import configured as monica_ok  # noqa: E402
-from lib.monica import upcoming_birthdays  # noqa: E402
+from lib.people import load_people, reconnect_due  # noqa: E402
+from lib.people import upcoming_birthdays as people_birthdays  # noqa: E402
 from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
 
 CATEGORY_COLOR = {
@@ -293,20 +293,28 @@ def _work_card() -> str:
 
 
 def _people_card() -> str:
-    """People (Monica) — upcoming birthdays, or a setup prompt until Monica is connected."""
-    if not monica_ok():
-        body = ('<p class="empty sm">Connect your Monica CRM to see birthdays &amp; '
-                'relationships here — see <b>MONICA_SETUP.md</b>.</p>')
+    """People — reconnect nudges + upcoming birthdays from the local people store."""
+    total = len(load_people())
+    btn = ('<form class="sum-btn" method="post" action="/sync-people">'
+           '<button title="refresh people from your mail contacts">↻ sync from mail</button></form>')
+    if not total:
+        body = (btn + '<p class="empty sm">No people yet — <b>sync from mail</b> to populate '
+                'from who actually emails you. (Full Monica CRM optional — MONICA_SETUP.md.)</p>')
         return _card("people", "People", "", body, collapsed=True)
-    bdays = upcoming_birthdays(days=45)
-    if not bdays:
-        body = '<p class="empty sm">No birthdays in the next 6 weeks.</p>'
-    else:
-        rows = "".join(
-            f'<li class="row"><span class="when">{b["in_days"]}d</span>'
-            f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
-        body = f'<ul class="rows">{rows}</ul>'
-    return _card("people", "People", str(len(bdays)) if bdays else "", body, collapsed=True)
+    blocks = [btn]
+    bdays = people_birthdays(days=45)
+    if bdays:
+        rows = "".join(f'<li class="row"><span class="when">{b["in_days"]}d</span>'
+                       f'<span class="what">🎂 {_esc(b["name"])}</span></li>' for b in bdays)
+        blocks.append(f'<div class="sub">birthdays</div><ul class="rows">{rows}</ul>')
+    recon = reconnect_due(days=30)[:6]
+    if recon:
+        rows = "".join(f'<li class="row"><span class="when">{r["days"]}d</span>'
+                       f'<span class="what">{_esc(r["name"])}</span></li>' for r in recon)
+        blocks.append(f'<div class="sub">not heard from</div><ul class="rows">{rows}</ul>')
+    if not bdays and not recon:
+        blocks.append(f'<p class="empty sm">{total} people tracked — nothing needs you.</p>')
+    return _card("people", "People", str(total), "".join(blocks), collapsed=True)
 
 
 def _render_html(today: date) -> str:

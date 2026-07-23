@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO))
 
 from lib.magictodo import breakdown  # noqa: E402
 from lib.mailsummary import summarize as summarize_inbox  # noqa: E402
+from lib.people import seed_from_mail  # noqa: E402
 from lib.taskstore import (  # noqa: E402
     CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, delete_task, load_tasks,
     set_steps, update_task,
@@ -116,6 +117,9 @@ class Handler(BaseHTTPRequestHandler):
                 _rebuild()
             elif path == "/summarize-mail":
                 summarize_inbox()
+                _rebuild()
+            elif path == "/sync-people":
+                seed_from_mail()
                 _rebuild()
             elif path == "/breakdown":
                 tid = first("id")
