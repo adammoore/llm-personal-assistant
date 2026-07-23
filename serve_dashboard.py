@@ -104,9 +104,12 @@ class Handler(BaseHTTPRequestHandler):
                     })
                     _rebuild()
             elif path == "/refresh":
-                # Refresh the fast local mirrors (Apple Reminders ~0.1s), then rebuild the HTML.
+                # Refresh local mirrors (Apple Reminders ~0.1s; unified inbox = mail fetch),
+                # then rebuild the HTML.
                 subprocess.run(["python3", str(REPO / "lib" / "reminders.py")],
                                check=False, capture_output=True, timeout=30)
+                subprocess.run(["python3", str(REPO / "lib" / "inbox.py"), "--cache"],
+                               check=False, capture_output=True, timeout=90)
                 _rebuild()
             elif path == "/pull-work":
                 # Read the open Enact work tabs into data/work_cache.json, then rebuild.

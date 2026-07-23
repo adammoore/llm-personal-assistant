@@ -31,7 +31,14 @@ NOISE = re.compile(
     r"quora|deals?\b|e-?newsletter|talent (network|pipeline)|boating|"
     # unambiguous marketing phrasing (safe: unlikely in real personal/work correspondence)
     r"don'?t miss|price drop|trial (has )?ended|getaway|travel hack|"
-    r"limited time|last chance|exclusive interview|expires? (soon|tonight)",
+    r"limited time|last chance|exclusive interview|expires? (soon|tonight)|"
+    # more marketing/transactional broadcast patterns
+    r"\breward\b|unlocked|treat drop|win your|credit check|instant access|"
+    r"updates? to your|your .* account will be deleted|view your .* update|"
+    r"create shared|new ways to build|t&cs?\b|turn up rates|book(ing)?\.com|"
+    r"rightmove|moneysupermarket|skypark|directloan|costa|"
+    # one-time-passcodes / automated verification (safe to hide from a glance)
+    r"\b\d{4,8} is your|security code|verification code|one[- ]time (pass)?code|\bOTP\b",
     re.IGNORECASE,
 )
 

@@ -261,6 +261,9 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
         # reflects anything captured via Siri / the Reminders app / the WhatsApp agent.
         subprocess.run(["python3", str(root / "lib/reminders.py")],
                        check=False, capture_output=True, timeout=30)
+        # Unified inbox (mail ×2 + iMessage) — slower (network mail fetch), still bounded.
+        subprocess.run(["python3", str(root / "lib/inbox.py"), "--cache"],
+                       check=False, capture_output=True, timeout=90)
         subprocess.run(["python3", str(root / "build_pa_dashboard.py")],
                        check=False, capture_output=True, timeout=60)
         subprocess.run(["python3", str(root / "skills/checkin-daily/push_today.py")],

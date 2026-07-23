@@ -337,6 +337,87 @@ def _work_card() -> str:
     return _card("work", "Work (Westminster)", count, body, collapsed=True)
 
 
+# Context → a calm pill colour (life-domain lens; legal/case reads warm, the rest cool/muted).
+_CTX_COLOR = {
+    "legal": "#B45309", "local-authority": "#7C3AED", "medical": "#059669",
+    "consulting": "#0E7490", "work": "#2563EB", "personal": "#64748B",
+}
+_INBOX_CACHE = Path(__file__).resolve().parent / "data" / "inbox_cache.json"
+
+
+def _inbox_card() -> str:
+    """Unified inbox — mail (both accounts) + iMessage in one stream, faceted by venue & context.
+
+    Venue = where it arrived (account/channel); context = the derived life-domain (personal /
+    consulting / legal / local-authority / medical / work). Two independent filter rows let Adam
+    pivot either way — e.g. 'legal' to see every case message across venues at once.
+    """
+    try:
+        data = json.loads(_INBOX_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return _card("inbox", "Inbox", "",
+                     '<p class="empty sm">No inbox snapshot yet — hit <b>refresh</b> or run '
+                     '<code>python3 lib/inbox.py --cache</code>.</p>', collapsed=True)
+    items = data.get("items", [])
+    if not items:
+        return _card("inbox", "Inbox", "", '<p class="empty sm">Inbox clear. 🎉</p>',
+                     collapsed=True)
+    facets = data.get("facets", {})
+
+    def chips(dim: str, key: str) -> str:
+        counts = facets.get(dim, {})
+        btns = [f'<button class="ichip on" data-{key}="all">all</button>']
+        for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            dot = (f'<i class="cdot" style="background:{_CTX_COLOR.get(name, "#64748B")}"></i>'
+                   if dim == "context" else "")
+            btns.append(f'<button class="ichip" data-{key}="{_esc(name)}">'
+                        f'{dot}{_esc(name)} <b>{n}</b></button>')
+        return f'<div class="ifac" data-dim="{dim}">' + "".join(btns) + "</div>"
+
+    rows = []
+    for m in items:
+        col = _CTX_COLOR.get(m["context"], "#64748B")
+        unread = ' data-unread="1"' if m.get("unread") else ""
+        rows.append(
+            f'<li class="row irow" data-venue="{_esc(m["venue"])}" '
+            f'data-context="{_esc(m["context"])}"{unread}>'
+            f'<span class="when">{_esc(m.get("date") or "")}</span>'
+            f'<span class="what"><span class="ivenue">{_esc(m["venue"])}</span> '
+            f'<span class="ictx" style="color:{col}">{_esc(m["context"])}</span> '
+            f'<b>{_esc(m["who"])}</b> — {_esc(m["subject"])}</span></li>')
+    at = _esc(data.get("at") or "")
+    body = (chips("venue", "v") + chips("context", "c")
+            + f'<ul class="rows inbox-rows">{"".join(rows)}</ul>'
+            + (f'<div class="sum-at">as of {at}</div>' if at else "")
+            + _INBOX_JS)
+    return _card("inbox", "Inbox", str(len(items)), body, collapsed=True)
+
+
+# Filter script: one active venue + one active context; a row shows only if it matches both.
+_INBOX_JS = """<script>(function(){
+  var card=document.currentScript.closest('.card'); if(!card) return;
+  var sel={venue:'all',context:'all'};
+  function apply(){
+    card.querySelectorAll('.irow').forEach(function(r){
+      var okV=sel.venue==='all'||r.dataset.venue===sel.venue;
+      var okC=sel.context==='all'||r.dataset.context===sel.context;
+      r.style.display=(okV&&okC)?'':'none';
+    });
+  }
+  card.querySelectorAll('.ifac').forEach(function(f){
+    var dim=f.dataset.dim;
+    f.querySelectorAll('.ichip').forEach(function(b){
+      b.addEventListener('click',function(e){
+        e.stopPropagation();
+        f.querySelectorAll('.ichip').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on');
+        sel[dim]=b.dataset.v||b.dataset.c; apply();
+      });
+    });
+  });
+})();</script>"""
+
+
 def _reminders_card() -> str:
     """Apple Reminders — open items mirrored from Siri / the Reminders app / the WhatsApp agent.
 
@@ -443,8 +524,8 @@ def _render_html(today: date) -> str:
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
     cards = (_today_card(today) + _tasks_card(today, open_tasks)
-             + _messages_card(worth_by_acct) + _work_card() + _reminders_card()
-             + _people_card() + _activity_card())
+             + _messages_card(worth_by_acct) + _inbox_card() + _work_card()
+             + _reminders_card() + _people_card() + _activity_card())
 
     # Facet bar — one calm row, one active facet at a time, each pivot single-focus (DESIGN.md).
     themes = sorted({t["theme"] for t in open_tasks if t.get("theme")})
@@ -594,6 +675,20 @@ main{ max-width:1100px; margin:0 auto; }
 .mail-sum{ white-space:pre-wrap; font-size:.85rem; background:var(--bg); border:1px solid var(--line);
   border-radius:10px; padding:.5rem .65rem; margin:0 0 .6rem; }
 .sum-at{ color:var(--muted); font:.68rem/1 var(--mono); margin-top:.35rem; }
+/* Unified inbox: venue + context filter chips and message rows */
+.ifac{ display:flex; flex-wrap:wrap; gap:.28rem; margin:.15rem 0 .4rem; }
+.ichip{ font:.66rem/1 var(--mono); letter-spacing:.02em; padding:.24rem .5rem; cursor:pointer;
+  border:1px solid var(--line); border-radius:1rem; background:transparent; color:var(--muted);
+  display:inline-flex; align-items:center; gap:.3rem; }
+.ichip:hover{ color:var(--fg); }
+.ichip.on{ background:var(--accent-soft,#e8f0ee); color:var(--fg); border-color:var(--accent,#2b7a6f); }
+.ichip b{ opacity:.65; font-weight:600; }
+.cdot{ width:.5rem; height:.5rem; border-radius:50%; display:inline-block; }
+.irow .ivenue{ font:.6rem/1 var(--mono); text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); border:1px solid var(--line); border-radius:.3rem; padding:.05rem .28rem; }
+.irow .ictx{ font:.62rem/1 var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+.irow[data-unread="1"] b{ color:var(--fg); }
+.inbox-rows{ max-height:22rem; overflow-y:auto; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
