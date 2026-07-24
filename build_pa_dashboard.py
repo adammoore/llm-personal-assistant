@@ -1014,14 +1014,16 @@ main{ max-width:1100px; margin:0 auto; }
 .pprio.p-high button{ color:#B45309; border-color:#B45309; font-weight:700; }
 .pprio.p-low button{ opacity:.6; }
 /* The Field — ZigZag × VKB spatial view */
-body.fieldmode .grid{ display:none; }
+body.fieldmode .grid, body.fieldmode .brief, body.fieldmode .tstrip,
+body.fieldmode .deck, body.fieldmode .ctl, body.fieldmode .capture,
+body.fieldmode .facets, body.fieldmode #thread{ display:none; }
 .field{ margin:.5rem 0; }
 .field-ctl{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
   font:.8rem/1 var(--mono); color:var(--muted); margin-bottom:.4rem; }
 .field-ctl select{ font:.78rem/1 var(--mono); padding:.2rem .4rem; border-radius:.4rem;
   border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
 .field-hint{ margin-left:auto; opacity:.75; }
-.field-plane{ position:relative; height:74vh; min-height:30rem; border:1px solid var(--line);
+.field-plane{ position:relative; height:82vh; min-height:32rem; border:1px solid var(--line);
   border-radius:.7rem; background:
     radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/26px 26px, var(--card);
   overflow:hidden; }
@@ -1032,10 +1034,15 @@ body.fieldmode .grid{ display:none; }
   box-shadow:0 0 0 3px color-mix(in srgb, var(--c,#64748B) 22%, transparent); flex:0 0 auto; }
 .fnode.big .fdot{ width:.92rem; height:.92rem; }
 .flabel{ font:.72rem/1.15 var(--sans, inherit); color:var(--fg); white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; background:color-mix(in srgb, var(--card) 78%, transparent);
-  padding:.05rem .2rem; border-radius:.25rem; }
-.fnode:hover{ z-index:5; }
-.fnode:hover .flabel{ overflow:visible; white-space:normal; max-width:14rem; }
+  overflow:hidden; text-overflow:ellipsis; max-width:6.5rem;
+  background:color-mix(in srgb, var(--card) 82%, transparent);
+  padding:.05rem .2rem; border-radius:.25rem;
+  opacity:0; transition:opacity .14s; pointer-events:none; }
+/* Constellation first: dots always; labels reveal on hover / focus / lit (VKB detail-on-demand). */
+.fnode:hover{ z-index:6; }
+.fnode:hover .flabel, .fnode.lit .flabel, .fnode.big .flabel{ opacity:1; }
+.fnode:hover .flabel{ overflow:visible; white-space:normal; max-width:15rem; z-index:6;
+  box-shadow:0 2px 8px rgba(0,0,0,.14); }
 .fnode.lit .fdot{ box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 40%, transparent),
   0 0 12px var(--c); }
 .fnode.lit .flabel{ font-weight:650; }
@@ -1251,12 +1258,24 @@ _SCRIPT = """
     }
     function jit(i,s){ return (Math.sin(i*(s===0?12.9898:78.233))*43758.5453%1)*0.075; }
     function layout(){
-      // axis region labels
       field.querySelectorAll('.faxis').forEach(function(e){e.remove();});
-      nodes.forEach(function(n,i){
-        var x=coord(xdim, n.dataset[xdim]||'—'), y=coord(ydim, n.dataset[ydim]||'—');
-        n.style.left=(7+x*86+jit(i,0)*100-3.75).toFixed(2)+'%';
-        n.style.top =(9+y*82+jit(i,1)*100-3.75).toFixed(2)+'%';
+      // Group nodes sharing a cell (same x,y) and pack each group into a small grid so they
+      // don't pile up — VKB-style spatial spread rather than an unreadable stack.
+      var cells={};
+      nodes.forEach(function(n){
+        var bx=coord(xdim, n.dataset[xdim]||'—'), by=coord(ydim, n.dataset[ydim]||'—');
+        var k=bx.toFixed(3)+'|'+by.toFixed(3);
+        (cells[k]=cells[k]||{bx:bx,by:by,g:[]}).g.push(n);
+      });
+      Object.keys(cells).forEach(function(k){
+        var c=cells[k], g=c.g, cols=Math.max(1,Math.ceil(Math.sqrt(g.length)));
+        var rows=Math.ceil(g.length/cols);
+        g.forEach(function(n,j){
+          var col=j%cols, row=Math.floor(j/cols);
+          var ox=(col-(cols-1)/2)*4.4, oy=(row-(rows-1)/2)*3.4;
+          n.style.left=Math.max(1,Math.min(97,7+c.bx*86+ox)).toFixed(2)+'%';
+          n.style.top =Math.max(2,Math.min(96,9+c.by*82+oy)).toFixed(2)+'%';
+        });
       });
       var plane=field.querySelector('.field-plane');
       vals(xdim).forEach(function(v){ if(v==='—')return;
@@ -1276,17 +1295,23 @@ _SCRIPT = """
         var wasLit=n.classList.contains('lit');
         nodes.forEach(function(m){ m.classList.remove('lit','dim'); });
         if(wasLit) return;
+        // Light its thread: its exact cell (same on BOTH active axes = spatial neighbours) plus
+        // its theme-mates. Broad single-axis matches would light a whole row/column, so we don't.
+        var xv=n.dataset[xdim], yv=n.dataset[ydim], th=n.dataset.theme;
+        var realTheme=th && th!=='—';
         nodes.forEach(function(m){
-          var share=(m.dataset[xdim]===n.dataset[xdim])||(m.dataset[ydim]===n.dataset[ydim])
-            ||(n.dataset.theme!=='—'&&m.dataset.theme===n.dataset.theme);
-          m.classList.add(share?'lit':'dim');
+          var sameCell=(m.dataset[xdim]===xv && m.dataset[ydim]===yv);
+          var sameTheme=realTheme && m.dataset.theme===th;
+          m.classList.add((m===n||sameCell||sameTheme)?'lit':'dim');
         });
       });
     });
     function show(on){ document.body.classList.toggle('fieldmode', on);
       field.hidden=!on; if(fb) fb.textContent=on?'▦ cards':'✳ field';
+      localStorage.setItem('pa-field', on?'1':'0');
       if(on){ if(document.body.classList.contains('spatial')) setLayout(false); layout(); } }
     if(fb) fb.addEventListener('click', function(){ show(field.hidden); });
+    if(localStorage.getItem('pa-field')==='1') show(true);   // survive the 60s auto-refresh
   })();
 
   // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
