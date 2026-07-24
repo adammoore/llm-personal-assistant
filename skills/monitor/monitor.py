@@ -259,6 +259,10 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
         root = repo_root()
         # Refresh the Apple Reminders mirror (fast, ~0.1s) before rebuilding so the dashboard
         # reflects anything captured via Siri / the Reminders app / the WhatsApp agent.
+        # Glance = mail worth/noise + calendar (today..+2) so the dashboard renders without
+        # network; refreshing it here (not in render) keeps mutations like ✓ done instant.
+        subprocess.run(["python3", str(root / "lib/glance.py")],
+                       check=False, capture_output=True, timeout=90)
         subprocess.run(["python3", str(root / "lib/reminders.py")],
                        check=False, capture_output=True, timeout=30)
         # Unified inbox (mail ×2 + iMessage) — slower (network mail fetch), still bounded.

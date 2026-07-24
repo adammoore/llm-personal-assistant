@@ -18,13 +18,14 @@ from __future__ import annotations
 import html
 import json
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.activity import unified  # noqa: E402
-from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
+from lib.comms import ACCOUNTS  # noqa: E402
+from lib.glance import load as glance_load  # noqa: E402
 from lib.mailsummary import load_summary  # noqa: E402
 from lib.people import load_people, reconnect_due  # noqa: E402
 from lib.pins import load_pins  # noqa: E402
@@ -126,10 +127,11 @@ def _reminders() -> list[dict]:
     return data.get("items", []) if data.get("ok") else []
 
 
-def _today_card(today: date) -> str:
+def _today_card(today: date, events_by_acct: dict) -> str:
     blocks, total = [], 0
+    tstr = today.isoformat()
     for acct in ACCOUNTS:
-        evs = calendar_events(acct["cal"], today, today)
+        evs = [e for e in events_by_acct.get(acct["id"], []) if e.get("date") == tstr]
         if not evs:
             continue
         total += len(evs)
@@ -576,14 +578,20 @@ def _render_html(today: date) -> str:
     overdue = sum(1 for t in open_tasks
                   if _due_state(t.get("due_date"), today) == "overdue")
 
-    worth_by_acct = {a["id"]: partition_inbox(fetch_inbox(a["mail"])) for a in ACCOUNTS}
+    # Mail + calendar come from the pre-computed glance cache (lib/glance.refresh), NOT live —
+    # so this render (which runs on every mutation) stays instant. Refreshed by monitor/​/refresh.
+    glance = glance_load()
+    worth_by_acct = {a["id"]: (glance["mail"].get(a["id"], {}).get("worth", []),
+                               glance["mail"].get(a["id"], {}).get("noise", 0))
+                     for a in ACCOUNTS}
     new_mail = sum(len(w) for w, _ in worth_by_acct.values())
+    events_by_acct = glance.get("events", {})
 
-    # Next meeting across both calendars over the next 2 days.
+    # Next meeting across both calendars over the next 2 days (from the cache).
     next_mtg = "—"
     upcoming = []
     for acct in ACCOUNTS:
-        for e in calendar_events(acct["cal"], today, today + timedelta(days=2)):
+        for e in events_by_acct.get(acct["id"], []):
             if e.get("when") and e["when"] != "all day":
                 upcoming.append((e.get("date", ""), e["when"], e["title"]))
     upcoming.sort()
@@ -607,7 +615,8 @@ def _render_html(today: date) -> str:
              f'<span class="n">{_esc(next_mtg)}</span><span class="l">next</span></button>')
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
-    cards = (_priorities_card(today) + _today_card(today) + _tasks_card(today, open_tasks)
+    cards = (_priorities_card(today) + _today_card(today, events_by_acct)
+             + _tasks_card(today, open_tasks)
              + _messages_card(worth_by_acct) + _inbox_card() + _work_card()
              + _reminders_card() + _people_card() + _activity_card())
 

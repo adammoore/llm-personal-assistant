@@ -17,14 +17,14 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import date, timedelta
 from pathlib import Path
 
 # Allow `python3 lib/activity.py` (run as a script) to resolve the `lib` package by
 # putting the repo root — one level up from this file — on the import path first.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
+from lib.comms import ACCOUNTS  # noqa: E402
+from lib.glance import load as glance_load  # noqa: E402
 from lib.onedrive import recent_files  # noqa: E402
 from lib.taskstore import load_tasks  # noqa: E402
 
@@ -116,12 +116,11 @@ def from_tasks() -> list[Activity]:
 
 
 def from_calendar(days: int = 14) -> list[Activity]:
-    """Upcoming events across both calendars for the next `days`, as activities."""
-    today = date.today()
-    end = today + timedelta(days=days)
+    """Upcoming events across both calendars, as activities — from the glance cache (no network)."""
+    events_by_acct = glance_load().get("events", {})
     activities: list[Activity] = []
     for acct in ACCOUNTS:
-        for ev in calendar_events(acct.get("cal", ""), today, end):
+        for ev in events_by_acct.get(acct.get("id", ""), []):
             day = ev.get("date") or ""
             when = ev.get("when") or ""
             # Compose an ISO-ish anchor: "YYYY-MM-DD HH:MM" when timed, else the date.
@@ -148,10 +147,11 @@ def from_calendar(days: int = 14) -> list[Activity]:
 
 
 def from_messages() -> list[Activity]:
-    """Mail worth a look across both inboxes (noise filtered out), as activities."""
+    """Mail worth a look across both inboxes (noise filtered), as activities — from glance cache."""
+    mail_by_acct = glance_load().get("mail", {})
     activities: list[Activity] = []
     for acct in ACCOUNTS:
-        worth, _noise = partition_inbox(fetch_inbox(acct.get("mail", "")))
+        worth = mail_by_acct.get(acct.get("id", ""), {}).get("worth", [])
         for msg in worth:
             sender = msg.get("from") or "(unknown)"
             subject = msg.get("subject") or "(no subject)"

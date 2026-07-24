@@ -113,12 +113,13 @@ class Handler(BaseHTTPRequestHandler):
                     toggle_pin(kind, obj_id)
                     _rebuild()
             elif path == "/refresh":
-                # Refresh local mirrors (Apple Reminders ~0.1s; unified inbox = mail fetch),
-                # then rebuild the HTML.
-                subprocess.run(["python3", str(REPO / "lib" / "reminders.py")],
-                               check=False, capture_output=True, timeout=30)
-                subprocess.run(["python3", str(REPO / "lib" / "inbox.py"), "--cache"],
-                               check=False, capture_output=True, timeout=90)
+                # The slow, network path: refresh mail+calendar (glance), Reminders, and the
+                # unified inbox into their caches, THEN rebuild. Mutations only rebuild (instant).
+                for script, extra, to in ((REPO / "lib/glance.py", [], 90),
+                                          (REPO / "lib/reminders.py", [], 30),
+                                          (REPO / "lib/inbox.py", ["--cache"], 90)):
+                    subprocess.run(["python3", str(script), *extra],
+                                   check=False, capture_output=True, timeout=to)
                 _rebuild()
             elif path == "/pull-work":
                 # Read the open Enact work tabs into data/work_cache.json, then rebuild.
