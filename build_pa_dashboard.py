@@ -23,14 +23,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.activity import unified  # noqa: E402
-from lib.comms import ACCOUNTS  # noqa: E402
-from lib.glance import load as glance_load  # noqa: E402
-from lib.mailsummary import load_summary  # noqa: E402
-from lib.people import load_people, reconnect_due  # noqa: E402
-from lib.pins import load_pins  # noqa: E402
-from lib.people import upcoming_birthdays as people_birthdays  # noqa: E402
-from lib.taskstore import CATEGORIES, load_tasks, repo_root  # noqa: E402
+from lib.activity import unified
+from lib.comms import ACCOUNTS
+from lib.glance import load as glance_load
+from lib.mailsummary import load_summary
+from lib.people import load_people, reconnect_due
+from lib.people import upcoming_birthdays as people_birthdays
+from lib.pins import load_pins
+from lib.taskstore import CATEGORIES, load_tasks, repo_root
 
 CATEGORY_COLOR = {
     "Work": "#2E75B6", "Personal": "#7C5CBF", "Health": "#3FA796",
@@ -154,7 +154,7 @@ def _today_card(today: date, events_by_acct: dict) -> str:
     if due_rem:
         total += len(due_rem)
         rows = "".join(
-            f'<li class="row"><span class="when">{_esc((r["due"][:10]))}</span>'
+            f'<li class="row"><span class="when">{_esc(r["due"][:10])}</span>'
             f'<span class="what">{_esc(r["title"])}</span></li>' for r in due_rem)
         blocks.append(f'<div class="sub">reminders due</div><ul class="rows">{rows}</ul>')
     body = "".join(blocks) or '<p class="empty">Nothing scheduled.</p>'
@@ -218,6 +218,8 @@ def _task_li(t: dict, today: date) -> str:
         f'<li class="task" data-state="{st}" '
         f'data-priority="{_esc(t.get("priority") or "normal")}" '
         f'data-theme="{_esc((t.get("theme") or "").lower())}" '
+        f'data-energy="{_esc(t.get("energy") or "medium")}" '
+        f'data-est="{_esc(str(t.get("estimate_min") or 0))}" '
         f'data-context="{_ctx(t.get("theme"), category)}" style="--accent:{accent}">'
         f'<div class="t-row"><span class="dot"></span>'
         f'<span class="t-body">{flag}{_esc(t["title"])} {due}{eff}</span>'
@@ -567,6 +569,53 @@ def _priorities_card(today: date) -> str:
     return _card("priorities", "Priorities", str(n), "".join(blocks))
 
 
+def _time_energy_strip(today: date, events_by_acct: dict) -> str:
+    """Time-awareness + 'right now' energy/time matching (ADHD: make time visible, cut decisions).
+
+    Left: a live clock, a day-progress bar (08:00→20:00), and a countdown to the next meeting —
+    time you can *see*, not calculate (the time-blindness aid). Right: 'right now I have [time] /
+    [energy]' chips that dim tasks down to the quick wins that fit — externalising the "what can I
+    actually do now?" decision. Both are client-side (see _TIME_JS); today's timed events ride
+    along in a JSON script tag so the countdown stays live between rebuilds.
+    """
+    tstr = today.isoformat()
+    seen, timed = set(), []
+    for acct in ACCOUNTS:
+        for e in events_by_acct.get(acct["id"], []):
+            if e.get("date") == tstr and e.get("when") and e["when"] != "all day":
+                k = (e["when"], e["title"])
+                if k not in seen:
+                    seen.add(k)
+                    timed.append({"t": e["when"], "title": (e["title"] or "")[:40]})
+    timed.sort(key=lambda x: x["t"])
+    # JSON in a <script> — escape '<' so a title can't break out of the tag.
+    ev_json = json.dumps(timed).replace("<", "\\u003c")
+    return (
+        '<div class="tstrip">'
+        '<div class="nownext">'
+        '<span class="clock" id="clock">—</span>'
+        '<div class="dayprog"><i id="dayfill"></i></div>'
+        '<span class="nextev" id="nextev"></span>'
+        '</div>'
+        '<div class="rightnow">'
+        '<span class="rn-lbl">right now:</span>'
+        '<span class="rn-grp rn-time">'
+        '<button class="rn on" data-min="0">any time</button>'
+        '<button class="rn" data-min="15">≤15m</button>'
+        '<button class="rn" data-min="30">≤30m</button>'
+        '<button class="rn" data-min="60">≤1h</button></span>'
+        '<span class="rn-grp rn-energy">'
+        '<button class="re on" data-energy="any">any energy</button>'
+        '<button class="re" data-energy="low">low</button>'
+        '<button class="re" data-energy="medium">med</button>'
+        '<button class="re" data-energy="high">high</button></span>'
+        '<span class="rn-count" id="rncount"></span>'
+        '</div>'
+        f'<script type="application/json" id="today-events">{ev_json}</script>'
+        '</div>'
+    )
+
+
 def _render_html(today: date) -> str:
     global _PINS
     _PINS = load_pins()
@@ -655,6 +704,7 @@ def _render_html(today: date) -> str:
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
         f'<div class="deck">{deck}</div>'
+        f'{_time_energy_strip(today, events_by_acct)}'
         # Two refresh affordances: rebuild the page from current data, or pull the work tabs.
         '<div class="ctl">'
         '<form method="post" action="/refresh"><button class="ghost" title="rebuild now">'
@@ -789,6 +839,26 @@ main{ max-width:1100px; margin:0 auto; }
 .card[data-key=priorities]{ border-color:#E0A500; }
 .card[data-key=priorities] .ttl{ color:#B8860B; }
 .card[data-key=priorities] .cnt{ background:#E0A500; color:#3a2c00; }
+/* Time-awareness + right-now strip */
+.tstrip{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1.1rem; margin:.5rem 0;
+  padding:.5rem .7rem; border:1px solid var(--line); border-radius:.6rem; background:var(--card); }
+.nownext{ display:flex; align-items:center; gap:.6rem; min-width:0; }
+.clock{ font:600 1.05rem/1 var(--mono); color:var(--fg); letter-spacing:.02em; }
+.dayprog{ position:relative; width:8rem; height:.42rem; border-radius:1rem;
+  background:var(--line); overflow:hidden; }
+.dayprog i{ position:absolute; inset:0 auto 0 0; width:0; background:var(--accent,#2b7a6f);
+  border-radius:1rem; transition:width .6s ease; }
+.nextev{ font:.78rem/1.3 var(--mono); color:var(--muted); }
+.nextev.soon{ color:#B45309; font-weight:600; }
+.rightnow{ display:flex; flex-wrap:wrap; align-items:center; gap:.3rem .5rem; }
+.rn-lbl{ font:.7rem/1 var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.rn-grp{ display:inline-flex; gap:.22rem; }
+.rn, .re{ font:.68rem/1 var(--mono); padding:.24rem .5rem; cursor:pointer; border-radius:1rem;
+  border:1px solid var(--line); background:transparent; color:var(--muted); }
+.rn:hover, .re:hover{ color:var(--fg); }
+.rn.on, .re.on{ background:var(--accent-soft,#e8f0ee); color:var(--fg); border-color:var(--accent,#2b7a6f); }
+.rn-count{ font:.72rem/1 var(--mono); color:var(--accent,#2b7a6f); font-weight:600; }
+.task.rn-dim{ opacity:.28; filter:grayscale(.4); }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -1082,6 +1152,54 @@ _SCRIPT = """
     if(a && a.closest && a.closest('.capture')) return;
     location.reload();
   }, 60000);
+
+  // ── Time awareness: live clock, day-progress bar (08:00–20:00), next-meeting countdown ──
+  (function(){
+    var box=document.getElementById('today-events');
+    var clock=document.getElementById('clock'), nextev=document.getElementById('nextev'),
+        fill=document.getElementById('dayfill');
+    var evs=[]; if(box){ try{ evs=JSON.parse(box.textContent||'[]'); }catch(e){} }
+    function toMin(s){ var p=(s||'0:0').split(':'); return (+p[0])*60+(+p[1]); }
+    function tick(){
+      var d=new Date(), nm=d.getHours()*60+d.getMinutes();
+      if(clock) clock.textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      var frac=Math.max(0,Math.min(1,(nm-480)/(1200-480)));   // 08:00→20:00
+      if(fill) fill.style.width=(frac*100).toFixed(1)+'%';
+      if(nextev){
+        var nx=null; for(var i=0;i<evs.length;i++){ if(toMin(evs[i].t)>nm){ nx=evs[i]; break; } }
+        if(nx){ var g=toMin(nx.t)-nm, h=Math.floor(g/60), m=g%60;
+          nextev.textContent='next: '+nx.title+' · in '+(h?h+'h ':'')+m+'m';
+          nextev.classList.toggle('soon', g<=15);
+        } else { nextev.textContent=evs.length?'nothing more scheduled today':'no meetings today'; }
+      }
+    }
+    tick(); setInterval(tick, 20000);
+  })();
+
+  // ── "Right now I have [time]/[energy]" → dim tasks down to the quick wins that fit ──
+  (function(){
+    var minSel=0, enSel='any', rank={low:1,medium:2,high:3};
+    function apply(){
+      var idle=(minSel===0 && enSel==='any'), n=0;
+      document.querySelectorAll('.task').forEach(function(t){
+        var est=parseInt(t.dataset.est||'0',10), en=t.dataset.energy||'medium';
+        var okT=(minSel===0)||(est>0? est<=minSel : true);   // no estimate = still eligible
+        var okE=(enSel==='any')||(rank[en]<=rank[enSel]);     // low energy → only easy tasks
+        var match=okT&&okE;
+        t.classList.toggle('rn-dim', !idle && !match);
+        if(match) n++;
+      });
+      var c=document.getElementById('rncount');
+      if(c) c.textContent=idle?'':(n+' fit right now');
+    }
+    function wire(sel, on){ document.querySelectorAll(sel).forEach(function(b){
+      b.addEventListener('click', function(){
+        b.parentNode.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});
+        b.classList.add('on'); on(b); apply();
+      }); }); }
+    wire('.rn-time .rn', function(b){ minSel=parseInt(b.dataset.min,10); });
+    wire('.rn-energy .re', function(b){ enSel=b.dataset.energy; });
+  })();
 })();
 """
 
