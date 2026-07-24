@@ -117,7 +117,8 @@ class Handler(BaseHTTPRequestHandler):
                 # unified inbox into their caches, THEN rebuild. Mutations only rebuild (instant).
                 for script, extra, to in ((REPO / "lib/glance.py", [], 90),
                                           (REPO / "lib/reminders.py", [], 30),
-                                          (REPO / "lib/inbox.py", ["--cache"], 90)):
+                                          (REPO / "lib/inbox.py", ["--cache"], 90),
+                                          (REPO / "lib/brief.py", [], 120)):
                     subprocess.run(["python3", str(script), *extra],
                                    check=False, capture_output=True, timeout=to)
                 _rebuild()

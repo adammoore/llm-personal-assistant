@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.activity import unified
+from lib.brief import load_brief
 from lib.comms import ACCOUNTS
 from lib.glance import load as glance_load
 from lib.mailsummary import load_summary
@@ -569,6 +570,31 @@ def _priorities_card(today: date) -> str:
     return _card("priorities", "Priorities", str(n), "".join(blocks))
 
 
+def _brief_hero() -> str:
+    """The situational companion brief — the primary surface, above the global view.
+
+    A warm, attention-ranked orientation ('where you are, the moves that matter most') from
+    lib/brief (claude, cached). This reframes the page from a tracking panel you audit into an
+    assistant that keeps you oriented; the cards below remain as the global 'see everything' layer.
+    """
+    b = load_brief()
+    if not b or not b.get("brief"):
+        return ('<section class="brief brief-empty">'
+                '<p>Your brief will appear here. Hit <b>↻ refresh</b> to generate it.</p>'
+                '</section>')
+    moves = "".join(f'<li>{_esc(m)}</li>' for m in (b.get("moves") or []))
+    moves_html = f'<ul class="moves">{moves}</ul>' if moves else ""
+    at = _esc(b.get("at") or "")
+    return (
+        '<section class="brief">'
+        f'<p class="brief-text">{_esc(b["brief"])}</p>'
+        + (f'<div class="moves-wrap"><span class="moves-lbl">next moves</span>{moves_html}</div>'
+           if moves_html else "")
+        + f'<div class="brief-at">as of {at}</div>'
+        '</section>'
+    )
+
+
 def _time_energy_strip(today: date, events_by_acct: dict) -> str:
     """Time-awareness + 'right now' energy/time matching (ADHD: make time visible, cut decisions).
 
@@ -703,8 +729,11 @@ def _render_html(today: date) -> str:
         '<button id="theme-btn" title="cycle theme">◐ theme</button>'
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
-        f'<div class="deck">{deck}</div>'
+        # Companion brief leads (situational, attention-ranked); the deck + cards are the
+        # global 'see everything' layer beneath it.
+        f'{_brief_hero()}'
         f'{_time_energy_strip(today, events_by_acct)}'
+        f'<div class="deck">{deck}</div>'
         # Two refresh affordances: rebuild the page from current data, or pull the work tabs.
         '<div class="ctl">'
         '<form method="post" action="/refresh"><button class="ghost" title="rebuild now">'
@@ -839,6 +868,21 @@ main{ max-width:1100px; margin:0 auto; }
 .card[data-key=priorities]{ border-color:#E0A500; }
 .card[data-key=priorities] .ttl{ color:#B8860B; }
 .card[data-key=priorities] .cnt{ background:#E0A500; color:#3a2c00; }
+/* Situational companion brief — the hero surface */
+.brief{ margin:.4rem 0 .2rem; padding:1rem 1.15rem; border-radius:.7rem;
+  background:linear-gradient(180deg, var(--accent-soft,#eaf3f1), var(--card));
+  border:1px solid var(--line); }
+.brief-text{ font:400 1.12rem/1.55 var(--sans, inherit); color:var(--fg); margin:0;
+  max-width:60ch; }
+.moves-wrap{ margin-top:.7rem; display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; }
+.moves-lbl{ font:.66rem/1 var(--mono); text-transform:uppercase; letter-spacing:.08em;
+  color:var(--muted); }
+.moves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.28rem; }
+.moves li{ font:500 .96rem/1.4 var(--sans, inherit); color:var(--fg); padding-left:1.1rem;
+  position:relative; }
+.moves li:before{ content:"→"; position:absolute; left:0; color:var(--accent,#2b7a6f); font-weight:600; }
+.brief-at{ margin-top:.55rem; font:.66rem/1 var(--mono); color:var(--muted); }
+.brief-empty p{ margin:0; color:var(--muted); font-size:.92rem; }
 /* Time-awareness + right-now strip */
 .tstrip{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1.1rem; margin:.5rem 0;
   padding:.5rem .7rem; border:1px solid var(--line); border-radius:.6rem; background:var(--card); }

@@ -268,6 +268,19 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
         # Unified inbox (mail ×2 + iMessage) — slower (network mail fetch), still bounded.
         subprocess.run(["python3", str(root / "lib/inbox.py"), "--cache"],
                        check=False, capture_output=True, timeout=90)
+        # Situational brief (claude -p, ~8s) — refresh on a longer throttle than the other
+        # surfaces so we don't burn a model call every cycle; the live clock covers immediacy.
+        blast = state.get("last_brief_refresh")
+        brief_due = True
+        if blast:
+            try:
+                brief_due = now - datetime.fromisoformat(blast) >= timedelta(minutes=30)
+            except ValueError:
+                brief_due = True
+        if brief_due:
+            subprocess.run(["python3", str(root / "lib/brief.py")],
+                           check=False, capture_output=True, timeout=120)
+            state["last_brief_refresh"] = now.isoformat(timespec="seconds")
         subprocess.run(["python3", str(root / "build_pa_dashboard.py")],
                        check=False, capture_output=True, timeout=60)
         subprocess.run(["python3", str(root / "skills/checkin-daily/push_today.py")],
