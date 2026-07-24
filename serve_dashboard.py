@@ -23,14 +23,24 @@ REPO = Path(__file__).resolve().parent
 DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
 sys.path.insert(0, str(REPO))
 
-from lib.magictodo import breakdown  # noqa: E402
-from lib.mailsummary import summarize as summarize_inbox  # noqa: E402
-from lib.people import seed_from_mail  # noqa: E402
-from lib.pins import KINDS as PIN_KINDS  # noqa: E402
-from lib.pins import toggle_pin  # noqa: E402
-from lib.taskstore import (  # noqa: E402
-    CATEGORIES, DEFAULT_CATEGORY, add_task, complete_task, delete_task, load_tasks,
-    set_steps, update_task,
+from lib.magictodo import breakdown
+from lib.mailsummary import summarize as summarize_inbox
+from lib.people import (
+    cycle_priority,
+    seed_from_mail,
+    set_kind,
+)
+from lib.pins import KINDS as PIN_KINDS
+from lib.pins import toggle_pin
+from lib.taskstore import (
+    CATEGORIES,
+    DEFAULT_CATEGORY,
+    add_task,
+    complete_task,
+    delete_task,
+    load_tasks,
+    set_steps,
+    update_task,
 )
 
 
@@ -49,7 +59,7 @@ def _ensure_built() -> None:
 class Handler(BaseHTTPRequestHandler):
     """Serve the dashboard for any path; refuse everything else. Loopback only."""
 
-    def do_GET(self):  # noqa: N802 (BaseHTTPRequestHandler API)
+    def do_GET(self):
         _ensure_built()
         try:
             body = DASHBOARD.read_bytes()
@@ -63,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self):  # noqa: N802
+    def do_POST(self):
         """Handle the dashboard's own forms: /capture (add) and /complete (mark done)."""
         path = urlparse(self.path).path
         length = int(self.headers.get("Content-Length", 0) or 0)
@@ -111,6 +121,14 @@ class Handler(BaseHTTPRequestHandler):
                 obj_id = first("id")
                 if kind in PIN_KINDS and obj_id:
                     toggle_pin(kind, obj_id)
+                    _rebuild()
+            elif path == "/person-kind":
+                # Reclassify a person as person/org, then rebuild.
+                if set_kind(first("id"), first("kind")):
+                    _rebuild()
+            elif path == "/person-priority":
+                # Cycle a person's priority (low→normal→high→low), then rebuild.
+                if cycle_priority(first("id")) is not None:
                     _rebuild()
             elif path == "/refresh":
                 # The slow, network path: refresh mail+calendar (glance), Reminders, and the

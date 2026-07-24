@@ -28,8 +28,7 @@ from lib.brief import load_brief
 from lib.comms import ACCOUNTS
 from lib.glance import load as glance_load
 from lib.mailsummary import load_summary
-from lib.people import load_people, reconnect_due
-from lib.people import upcoming_birthdays as people_birthdays
+from lib.people import load_people, ranked_people
 from lib.pins import load_pins
 from lib.taskstore import CATEGORIES, load_tasks, repo_root
 
@@ -476,8 +475,32 @@ def _reminders_card() -> str:
     return _card("reminders", "Reminders", str(len(items)), body, collapsed=True)
 
 
+def _person_controls(p: dict) -> tuple[str, str]:
+    """(kind-toggle badge, priority chip) forms for a person row."""
+    is_org = p["kind"] == "org"
+    badge = "🏢" if is_org else "👤"
+    other = "person" if is_org else "org"
+    kind_toggle = (
+        f'<form class="pkind" method="post" action="/person-kind">'
+        f'<input type="hidden" name="id" value="{p["id"]}">'
+        f'<input type="hidden" name="kind" value="{other}">'
+        f'<button title="typed as {p["kind"]} — click to mark as {other}">{badge}</button></form>')
+    prio = p["priority"]
+    prio_chip = (
+        f'<form class="pprio p-{_esc(prio)}" method="post" action="/person-priority">'
+        f'<input type="hidden" name="id" value="{p["id"]}">'
+        f'<button title="priority {prio} — click to cycle">{_esc(prio)}</button></form>')
+    return kind_toggle, prio_chip
+
+
 def _people_card() -> str:
-    """People — reconnect nudges + upcoming birthdays from the local people store."""
+    """People in DESERVING-ATTENTION order, typed (person vs institution/business).
+
+    Ordered by an attention score parallel to tasks (pins ≫ priority ≫ reconnect-due ≫ birthday)
+    so whoever most needs Adam floats up — priority stays as the manual lever, but it's no longer
+    the only signal. Each row: a 👤/🏢 kind toggle, the name (opens their thread), the strongest
+    reason, a click-to-cycle priority chip, and a pin.
+    """
     total = len(load_people())
     btn = ('<form class="sum-btn" method="post" action="/sync-people">'
            '<button title="refresh people from your mail contacts">↻ sync from mail</button></form>')
@@ -485,36 +508,20 @@ def _people_card() -> str:
         body = (btn + '<p class="empty sm">No people yet — <b>sync from mail</b> to populate '
                 'from who actually emails you. (Full Monica CRM optional — MONICA_SETUP.md.)</p>')
         return _card("people", "People", "", body, collapsed=True)
-    blocks = [btn]
-    bdays = people_birthdays(days=45)
-    if bdays:
-        rows = "".join(
-            f'<li class="row person" data-person="{_esc(b["name"])}" role="button" tabindex="0">'
-            f'<span class="when">{b["in_days"]}d</span>'
-            f'<span class="what">🎂 {_esc(b["name"])}</span>'
-            f'{_pin_btn("person", b["name"], _is_pinned("person", b["name"]))}</li>'
-            for b in bdays)
-        blocks.append(f'<div class="sub">birthdays</div><ul class="rows">{rows}</ul>')
-    recon = reconnect_due(days=30)[:6]
-    if recon:
-        rows = "".join(
-            f'<li class="row person" data-person="{_esc(r["name"])}" role="button" tabindex="0">'
-            f'<span class="when">{r["days"]}d</span>'
-            f'<span class="what">{_esc(r["name"])}</span>'
-            f'{_pin_btn("person", r["name"], _is_pinned("person", r["name"]))}</li>'
-            for r in recon)
-        blocks.append(f'<div class="sub">not heard from</div><ul class="rows">{rows}</ul>')
-    # All tracked people — each a pin toggle + a chip that opens their thread.
-    everyone = sorted(load_people(), key=lambda p: p.get("name", ""))
-    chips = "".join(
-        f'<span class="pchip-wrap">'
-        f'{_pin_btn("person", p["name"], _is_pinned("person", p["name"]))}'
-        f'<button class="person-chip" data-person="{_esc(p["name"])}">{_esc(p["name"])}</button>'
-        f'</span>' for p in everyone)
-    blocks.append(f'<div class="sub">everyone</div><div class="people-chips">{chips}</div>')
-    if not bdays and not recon:
-        blocks.append(f'<p class="empty sm">{total} people tracked — nothing needs you.</p>')
-    return _card("people", "People", str(total), "".join(blocks), collapsed=True)
+    ranked = ranked_people(set(_PINS.get("person", [])))
+    rows = []
+    for p in ranked:
+        kind_toggle, prio_chip = _person_controls(p)
+        reason = p.get("_reason") or ""
+        reason_html = (f'<span class="preason">{_esc(reason)}</span>'
+                       if reason and reason != p["priority"] else "")
+        rows.append(
+            f'<li class="row prow" data-person="{_esc(p["name"])}" data-kind="{p["kind"]}" '
+            f'role="button" tabindex="0">{kind_toggle}'
+            f'<span class="what">{_esc(p["name"])} {reason_html}</span>'
+            f'{prio_chip}{_pin_btn("person", p["name"], p["_pinned"])}</li>')
+    body = btn + f'<ul class="rows">{"".join(rows)}</ul>'
+    return _card("people", "People", str(total), body, collapsed=True)
 
 
 def _priorities_card(today: date) -> str:
@@ -903,6 +910,18 @@ main{ max-width:1100px; margin:0 auto; }
 .rn.on, .re.on{ background:var(--accent-soft,#e8f0ee); color:var(--fg); border-color:var(--accent,#2b7a6f); }
 .rn-count{ font:.72rem/1 var(--mono); color:var(--accent,#2b7a6f); font-weight:600; }
 .task.rn-dim{ opacity:.28; filter:grayscale(.4); }
+/* People rows: kind toggle, priority chip, attention reason */
+.prow{ align-items:center; }
+.pkind{ display:inline-flex; margin:0 .35rem 0 0; flex:0 0 auto; }
+.pkind button{ background:none; border:none; cursor:pointer; font-size:.92rem; padding:0;
+  line-height:1; opacity:.9; }
+.preason{ font:.66rem/1 var(--mono); color:var(--muted); margin-left:.35rem; }
+.pprio{ display:inline-flex; margin:0 .3rem 0 auto; flex:0 0 auto; }
+.pprio button{ font:.6rem/1 var(--mono); text-transform:uppercase; letter-spacing:.04em;
+  padding:.16rem .4rem; border-radius:1rem; cursor:pointer; border:1px solid var(--line);
+  background:transparent; color:var(--muted); }
+.pprio.p-high button{ color:#B45309; border-color:#B45309; font-weight:700; }
+.pprio.p-low button{ opacity:.6; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
