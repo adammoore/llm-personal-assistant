@@ -316,6 +316,63 @@ def _activity_card() -> str:
                  collapsed=True)
 
 
+# ── The Field: a ZigZag×VKB view — items laid out in space by two chosen dimensions ─────────
+# ZigZag: everything is a cell connected along named dimensions; you view the structure along
+# any two of them. VKB: those two dimensions become a 2D plane and the cells render spatially,
+# meaning carried by position/proximity/colour, not by boxes. Re-pick a dimension → the whole
+# structure rotates. Node dimension values ride in data-* attributes; the layout is client-side
+# (see _FIELD_JS) so switching dimensions is instant.
+_FIELD_DIMS = ("context", "theme", "source", "priority", "when", "time")
+
+
+def _when_band(time_iso: str | None, source: str, today: date) -> str:
+    day = (time_iso or "")[:10]
+    try:
+        delta = (date.fromisoformat(day) - today).days
+    except ValueError:
+        return "none"
+    if source == "task":
+        return ("overdue" if delta < 0 else "today" if delta == 0
+                else "soon" if delta <= 7 else "later")
+    return "today" if delta == 0 else "soon" if 0 < delta <= 7 else "past" if delta < 0 else "later"
+
+
+def _fnode(title: str, source: str, context: str, theme: str,
+           priority: str | None, when: str, time_iso: str | None) -> str:
+    color = _CTX_COLOR.get(context, "#64748B")
+    cls = "fnode big" if priority == "high" else "fnode"
+    return (f'<div class="{cls}" data-source="{_esc(source)}" data-context="{_esc(context)}" '
+            f'data-theme="{_esc(theme or "—")}" data-priority="{_esc(priority or "normal")}" '
+            f'data-when="{_esc(when)}" data-time="{_esc((time_iso or "")[:10])}" '
+            f'style="--c:{color}" title="{_esc(title)}">'
+            f'<span class="fdot"></span><span class="flabel">{_esc(title[:40])}</span></div>')
+
+
+def _field_view(today: date) -> str:
+    nodes = [
+        _fnode(a.title, a.source, _ctx(a.theme, a.type if a.source == "task" else None),
+               (a.theme or "").lower(), a.priority, _when_band(a.timestamp, a.source, today),
+               a.timestamp)
+        for a in unified(days=21)[:60]]
+    nodes += [
+        _fnode(p["name"], "person", p.get("context") or "personal", "—",
+               p.get("priority"), "—", p.get("last_seen"))
+        for p in ranked_people(set(_PINS.get("person", [])))[:24]]
+
+    def picker(axis: str, default: str) -> str:
+        opts = "".join(f'<option value="{d}"{" selected" if d == default else ""}>{d}</option>'
+                       for d in _FIELD_DIMS)
+        return f'<select class="fdim" data-axis="{axis}">{opts}</select>'
+
+    return (
+        '<div id="field" class="field" hidden>'
+        f'<div class="field-ctl">arrange by {picker("x", "context")} <b>×</b> '
+        f'{picker("y", "when")}'
+        '<span class="field-hint">click a node to light its thread · re-pick a dimension to '
+        'rotate the space</span></div>'
+        f'<div class="field-plane">{"".join(nodes)}</div></div>')
+
+
 def _work_card() -> str:
     """Work (Westminster) card from the work-pull cache — labels + snippets + freshness.
 
@@ -762,6 +819,8 @@ def _render_html(today: date) -> str:
         '<div class="prefs">'
         '<button id="layout-btn" title="grid ↔ spatial map (urgency · need · context)">'
         '⊞ grid</button>'
+        '<button id="field-btn" title="the Field — items in space by two chosen dimensions '
+        '(ZigZag × VKB)">✳ field</button>'
         '<button id="theme-btn" title="cycle theme">◐ theme</button>'
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
@@ -790,6 +849,7 @@ def _render_html(today: date) -> str:
         f'{facet_bar}'
         '<div id="thread" class="thread" hidden></div>'
         f'<div class="grid">{cards}</div>'
+        f'{_field_view(today)}'
         '<footer>Central overview · CIDER is your focus space · private</footer>'
         f"</main><script>{_SCRIPT}</script></body></html>"
     )
@@ -953,6 +1013,37 @@ main{ max-width:1100px; margin:0 auto; }
   background:transparent; color:var(--muted); }
 .pprio.p-high button{ color:#B45309; border-color:#B45309; font-weight:700; }
 .pprio.p-low button{ opacity:.6; }
+/* The Field — ZigZag × VKB spatial view */
+body.fieldmode .grid{ display:none; }
+.field{ margin:.5rem 0; }
+.field-ctl{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+  font:.8rem/1 var(--mono); color:var(--muted); margin-bottom:.4rem; }
+.field-ctl select{ font:.78rem/1 var(--mono); padding:.2rem .4rem; border-radius:.4rem;
+  border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+.field-hint{ margin-left:auto; opacity:.75; }
+.field-plane{ position:relative; height:74vh; min-height:30rem; border:1px solid var(--line);
+  border-radius:.7rem; background:
+    radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/26px 26px, var(--card);
+  overflow:hidden; }
+.fnode{ position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center;
+  gap:.3rem; max-width:11rem; cursor:pointer; transition:left .5s cubic-bezier(.4,0,.2,1),
+  top .5s cubic-bezier(.4,0,.2,1), opacity .3s; z-index:2; }
+.fdot{ width:.62rem; height:.62rem; border-radius:50%; background:var(--c,#64748B);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--c,#64748B) 22%, transparent); flex:0 0 auto; }
+.fnode.big .fdot{ width:.92rem; height:.92rem; }
+.flabel{ font:.72rem/1.15 var(--sans, inherit); color:var(--fg); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; background:color-mix(in srgb, var(--card) 78%, transparent);
+  padding:.05rem .2rem; border-radius:.25rem; }
+.fnode:hover{ z-index:5; }
+.fnode:hover .flabel{ overflow:visible; white-space:normal; max-width:14rem; }
+.fnode.lit .fdot{ box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 40%, transparent),
+  0 0 12px var(--c); }
+.fnode.lit .flabel{ font-weight:650; }
+.fnode.dim{ opacity:.22; }
+.faxis{ position:absolute; font:.6rem/1 var(--mono); text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); opacity:.7; z-index:1; pointer-events:none; }
+.faxis.fx{ bottom:.3rem; transform:translateX(-50%); }
+.faxis.fy{ left:.3rem; transform:translateY(-50%); }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -1134,6 +1225,69 @@ _SCRIPT = """
   if(localStorage.getItem('pa-spatial')==='1') setLayout(true);
   if(lb) lb.addEventListener('click', function(){
     setLayout(!document.body.classList.contains('spatial')); });
+
+  // ── The Field (ZigZag × VKB): lay items out in a 2D plane by two chosen dimensions ──
+  (function(){
+    var field=document.getElementById('field'); if(!field) return;
+    var nodes=[].slice.call(field.querySelectorAll('.fnode'));
+    var fb=document.getElementById('field-btn');
+    var xdim='context', ydim='when';
+    // Ordered dimensions read low→high along the axis; others are sorted alphabetically.
+    var ORD={when:['overdue','today','soon','later','past','none'],
+             priority:['high','normal','low','']};
+    var times=nodes.map(function(n){return Date.parse(n.dataset.time);})
+                   .filter(function(t){return !isNaN(t);});
+    var tmin=Math.min.apply(null,times), tmax=Math.max.apply(null,times);
+    function vals(dim){
+      if(ORD[dim]) return ORD[dim];
+      var s={}; nodes.forEach(function(n){ s[n.dataset[dim]||'—']=1; });
+      return Object.keys(s).sort();
+    }
+    function coord(dim,val){
+      if(dim==='time'){ var t=Date.parse(val);
+        return isNaN(t)?0.5:(tmax>tmin?(t-tmin)/(tmax-tmin):0.5); }
+      var vs=vals(dim), i=vs.indexOf(val); if(i<0) i=vs.length-1;
+      return vs.length>1 ? i/(vs.length-1) : 0.5;
+    }
+    function jit(i,s){ return (Math.sin(i*(s===0?12.9898:78.233))*43758.5453%1)*0.075; }
+    function layout(){
+      // axis region labels
+      field.querySelectorAll('.faxis').forEach(function(e){e.remove();});
+      nodes.forEach(function(n,i){
+        var x=coord(xdim, n.dataset[xdim]||'—'), y=coord(ydim, n.dataset[ydim]||'—');
+        n.style.left=(7+x*86+jit(i,0)*100-3.75).toFixed(2)+'%';
+        n.style.top =(9+y*82+jit(i,1)*100-3.75).toFixed(2)+'%';
+      });
+      var plane=field.querySelector('.field-plane');
+      vals(xdim).forEach(function(v){ if(v==='—')return;
+        var l=document.createElement('span'); l.className='faxis fx'; l.textContent=v;
+        l.style.left=(7+coord(xdim,v)*86).toFixed(1)+'%'; plane.appendChild(l); });
+      vals(ydim).forEach(function(v){ if(v==='—')return;
+        var l=document.createElement('span'); l.className='faxis fy'; l.textContent=v;
+        l.style.top=(9+coord(ydim,v)*82).toFixed(1)+'%'; plane.appendChild(l); });
+    }
+    field.querySelectorAll('.fdim').forEach(function(sel){
+      sel.addEventListener('change',function(){
+        if(sel.dataset.axis==='x') xdim=sel.value; else ydim=sel.value; layout(); });
+    });
+    // Follow a dimension: click a node → light everything sharing either axis value or its theme.
+    nodes.forEach(function(n){
+      n.addEventListener('click',function(){
+        var wasLit=n.classList.contains('lit');
+        nodes.forEach(function(m){ m.classList.remove('lit','dim'); });
+        if(wasLit) return;
+        nodes.forEach(function(m){
+          var share=(m.dataset[xdim]===n.dataset[xdim])||(m.dataset[ydim]===n.dataset[ydim])
+            ||(n.dataset.theme!=='—'&&m.dataset.theme===n.dataset.theme);
+          m.classList.add(share?'lit':'dim');
+        });
+      });
+    });
+    function show(on){ document.body.classList.toggle('fieldmode', on);
+      field.hidden=!on; if(fb) fb.textContent=on?'▦ cards':'✳ field';
+      if(on){ if(document.body.classList.contains('spatial')) setLayout(false); layout(); } }
+    if(fb) fb.addEventListener('click', function(){ show(field.hidden); });
+  })();
 
   // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
   function applyFacet(f){
