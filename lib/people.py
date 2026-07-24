@@ -37,9 +37,9 @@ _INST_DOMAINS = (".gov.uk", ".nhs.uk", ".ac.uk", ".gov", ".org.uk", ".sch.uk", "
 
 
 def _looks_personal(name: str) -> bool:
-    """A clean 2-3 token title-case name with no connector words — 'Hayley McCabe', 'CJ Woodford'."""
+    """A clean 2-4 token title-case name, no connectors — 'Hayley McCabe', 'Isaac James Vials Moore'."""
     toks = name.split()
-    return (2 <= len(toks) <= 3
+    return (2 <= len(toks) <= 4
             and all(t.isalpha() and t[:1].isupper() for t in toks)
             and not any(t.lower() in _CONNECTORS for t in toks))
 
