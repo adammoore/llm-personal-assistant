@@ -28,6 +28,7 @@ from lib.mailsummary import summarize as summarize_inbox
 from lib.people import (
     cycle_priority,
     seed_from_mail,
+    set_fields,
     set_kind,
 )
 from lib.pins import KINDS as PIN_KINDS
@@ -129,6 +130,14 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/person-priority":
                 # Cycle a person's priority (low→normal→high→low), then rebuild.
                 if cycle_priority(first("id")) is not None:
+                    _rebuild()
+            elif path == "/person-edit":
+                # Human correcting machine-guessed metadata on a person.
+                if set_fields(first("id"), {
+                        "name": first("name"), "kind": first("kind"),
+                        "circle": first("circle"), "priority": first("priority"),
+                        "context": first("context"), "birthday": first("birthday"),
+                        "relationship": first("relationship"), "notes": first("notes")}):
                     _rebuild()
             elif path == "/refresh":
                 # The slow, network path: refresh mail+calendar (glance), Reminders, and the

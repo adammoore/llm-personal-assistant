@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.comms import ACCOUNTS, _run, is_noise
-from lib.people import classify_kind, load_people, save_people, upsert
+from lib.people import circle_for, classify_kind, load_people, save_people, upsert
 
 _AB_DIR = Path.home() / "Library" / "Application Support" / "AddressBook" / "Sources"
 
@@ -211,6 +211,7 @@ def add_people(cands: list[dict]) -> int:
         rec.setdefault("priority", "normal")
         rec["discovered"] = c.get("source", "discover")
         rec["interactions"] = max(rec.get("interactions", 0), c.get("count", 0))
+        rec.setdefault("circle", circle_for(rec["interactions"]))   # editable first-guess
     save_people(people)
     return len(people) - before
 

@@ -66,6 +66,26 @@ def classify_kind(name: str, email: str | None = None) -> str:
     return "org" if len(n.split()) != 2 else "person"       # multi-word non-name → likely a brand
 
 
+# ── Circles of proximity ────────────────────────────────────────────────────────────────────
+# A relational-distance classifier (Dunbar-ish): who's close vs peripheral. Auto-seeded from
+# interaction volume (a proxy), then Adam corrects by hand — the count is a starting guess, not
+# the truth (a beloved but rarely-texted relative belongs 'inner' regardless).
+CIRCLES = ("inner", "close", "wider", "peripheral")
+_CIRCLE_ATTN = {"inner": 18, "close": 8, "wider": 2, "peripheral": 0}
+
+
+def circle_for(interactions: int | None) -> str:
+    """First-guess proximity circle from interaction volume (editable afterwards)."""
+    n = interactions or 0
+    if n >= 500:
+        return "inner"
+    if n >= 50:
+        return "close"
+    if n >= 10:
+        return "wider"
+    return "peripheral"
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -226,6 +246,11 @@ def attention_score(p: dict, today: date | None = None, *, pinned: bool = False)
     s += {"high": 25, "normal": 0, "low": -10}.get(prio, 0)
     if prio == "high" and not reason:
         reason = "high priority"
+    # Proximity: closer circles carry a standing baseline of attention.
+    circle = p.get("circle")
+    s += _CIRCLE_ATTN.get(circle, 0)
+    if circle in ("inner", "close") and not reason:
+        reason = circle
     # Reconnect pull: a growing nag once silence passes ~30 days (capped so it can't dominate).
     seen = p.get("last_seen")
     if seen:
@@ -255,6 +280,7 @@ def ranked_people(pinned_names: set | None = None, today: date | None = None) ->
         sc, reason = attention_score(p, today, pinned=p.get("name") in pinned_names)
         out.append({**p, "kind": p.get("kind") or classify_kind(p.get("name", ""), p.get("email")),
                     "priority": p.get("priority") or "normal",
+                    "circle": p.get("circle") or "peripheral",
                     "_score": sc, "_reason": reason,
                     "_pinned": p.get("name") in pinned_names})
     out.sort(key=lambda x: -x["_score"])
@@ -296,6 +322,33 @@ def cycle_priority(person_id, path: Path | None = None) -> str | None:
     return p["priority"]
 
 
+_EDITABLE = ("name", "kind", "circle", "priority", "context", "birthday", "relationship", "notes")
+_FREEFORM = ("birthday", "relationship", "notes")
+
+
+def set_fields(person_id, fields: dict, path: Path | None = None) -> bool:
+    """Update a person's editable fields (the human correcting machine-guessed metadata)."""
+    people = load_people(path)
+    p = _find(people, person_id)
+    if not p:
+        return False
+    for k, v in fields.items():
+        if k not in _EDITABLE:
+            continue
+        v = (v or "").strip() if isinstance(v, str) else v
+        if k == "kind" and v not in ("person", "org"):
+            continue
+        if k == "circle" and v not in CIRCLES:
+            continue
+        if k == "priority" and v not in ("low", "normal", "high"):
+            continue
+        if k == "name" and not v:                          # never blank the name
+            continue
+        p[k] = (v or None) if k in _FREEFORM else v
+    save_people(people, path)
+    return True
+
+
 def classify_all(path: Path | None = None) -> int:
     """Backfill kind + priority on every stored person (idempotent). Returns count touched."""
     people = load_people(path)
@@ -306,6 +359,9 @@ def classify_all(path: Path | None = None) -> int:
             touched += 1
         if not p.get("priority"):
             p["priority"] = "normal"
+            touched += 1
+        if not p.get("circle"):
+            p["circle"] = circle_for(p.get("interactions"))
             touched += 1
     if touched:
         save_people(people, path)

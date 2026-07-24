@@ -28,7 +28,7 @@ from lib.brief import load_brief
 from lib.comms import ACCOUNTS
 from lib.glance import load as glance_load
 from lib.mailsummary import load_summary
-from lib.people import load_people, ranked_people
+from lib.people import CIRCLES, load_people, ranked_people
 from lib.pins import load_pins
 from lib.taskstore import CATEGORIES, load_tasks, repo_root
 
@@ -493,13 +493,43 @@ def _person_controls(p: dict) -> tuple[str, str]:
     return kind_toggle, prio_chip
 
 
-def _people_card() -> str:
-    """People in DESERVING-ATTENTION order, typed (person vs institution/business).
+def _person_edit_form(p: dict) -> str:
+    """Inline edit form so Adam can correct any machine-guessed metadata on a person."""
+    return (
+        '<form class="edit" method="post" action="/person-edit" hidden>'
+        f'<input type="hidden" name="id" value="{p["id"]}">'
+        f'<input name="name" value="{_esc(p["name"])}" title="name">'
+        f'{_sel("kind", ["person", "org"], p.get("kind") or "person")}'
+        f'{_sel("circle", list(CIRCLES), p.get("circle") or "peripheral")}'
+        f'{_sel("priority", ["low", "normal", "high"], p.get("priority") or "normal")}'
+        f'<input name="context" value="{_esc(p.get("context") or "")}" placeholder="context">'
+        f'<input name="birthday" value="{_esc(p.get("birthday") or "")}" placeholder="birthday MM-DD">'
+        f'<input name="relationship" value="{_esc(p.get("relationship") or "")}" '
+        'placeholder="relationship">'
+        f'<input name="notes" value="{_esc(p.get("notes") or "")}" placeholder="notes">'
+        '<button>save</button></form>')
 
-    Ordered by an attention score parallel to tasks (pins ≫ priority ≫ reconnect-due ≫ birthday)
-    so whoever most needs Adam floats up — priority stays as the manual lever, but it's no longer
-    the only signal. Each row: a 👤/🏢 kind toggle, the name (opens their thread), the strongest
-    reason, a click-to-cycle priority chip, and a pin.
+
+def _person_row(p: dict) -> str:
+    kind_toggle, prio_chip = _person_controls(p)
+    reason = p.get("_reason") or ""
+    reason_html = (f'<span class="preason">{_esc(reason)}</span>'
+                   if reason and reason not in (p["priority"], p.get("circle")) else "")
+    return (
+        f'<li class="row prow" data-person="{_esc(p["name"])}" data-kind="{p["kind"]}" '
+        f'role="button" tabindex="0">{kind_toggle}'
+        f'<span class="what">{_esc(p["name"])} {reason_html}</span>'
+        f'{prio_chip}{_pin_btn("person", p["name"], p["_pinned"])}'
+        f'<button type="button" class="edit-btn" title="edit">✎</button>'
+        f'{_person_edit_form(p)}</li>')
+
+
+def _people_card() -> str:
+    """People grouped by CIRCLE OF PROXIMITY (inner→peripheral), typed (person/org), each editable.
+
+    Circle is a relational-distance classifier auto-guessed from interaction volume and then
+    corrected by hand (the ✎ edit form fixes name/kind/circle/priority/context/birthday/notes).
+    Within each circle, rows sit in deserving-attention order; closer circles also lift attention.
     """
     total = len(load_people())
     btn = ('<form class="sum-btn" method="post" action="/sync-people">'
@@ -509,19 +539,18 @@ def _people_card() -> str:
                 'from who actually emails you. (Full Monica CRM optional — MONICA_SETUP.md.)</p>')
         return _card("people", "People", "", body, collapsed=True)
     ranked = ranked_people(set(_PINS.get("person", [])))
-    rows = []
+    by_circle: dict[str, list] = {c: [] for c in CIRCLES}
     for p in ranked:
-        kind_toggle, prio_chip = _person_controls(p)
-        reason = p.get("_reason") or ""
-        reason_html = (f'<span class="preason">{_esc(reason)}</span>'
-                       if reason and reason != p["priority"] else "")
-        rows.append(
-            f'<li class="row prow" data-person="{_esc(p["name"])}" data-kind="{p["kind"]}" '
-            f'role="button" tabindex="0">{kind_toggle}'
-            f'<span class="what">{_esc(p["name"])} {reason_html}</span>'
-            f'{prio_chip}{_pin_btn("person", p["name"], p["_pinned"])}</li>')
-    body = btn + f'<ul class="rows">{"".join(rows)}</ul>'
-    return _card("people", "People", str(total), body, collapsed=True)
+        by_circle.get(p.get("circle") or "peripheral", by_circle["peripheral"]).append(p)
+    blocks = [btn]
+    for circle in CIRCLES:
+        grp = by_circle[circle]
+        if not grp:
+            continue
+        rows = "".join(_person_row(p) for p in grp)
+        blocks.append(f'<div class="sub">{circle} · {len(grp)}</div>'
+                      f'<ul class="rows">{rows}</ul>')
+    return _card("people", "People", str(total), "".join(blocks), collapsed=True)
 
 
 def _priorities_card(today: date) -> str:
@@ -911,7 +940,9 @@ main{ max-width:1100px; margin:0 auto; }
 .rn-count{ font:.72rem/1 var(--mono); color:var(--accent,#2b7a6f); font-weight:600; }
 .task.rn-dim{ opacity:.28; filter:grayscale(.4); }
 /* People rows: kind toggle, priority chip, attention reason */
-.prow{ align-items:center; }
+.prow{ align-items:center; flex-wrap:wrap; }
+.prow .edit{ flex:1 1 100%; }
+.prow .edit input[name=name]{ flex:1 1 8rem; }
 .pkind{ display:inline-flex; margin:0 .35rem 0 0; flex:0 0 auto; }
 .pkind button{ background:none; border:none; cursor:pointer; font-size:.92rem; padding:0;
   line-height:1; opacity:.9; }
@@ -1075,10 +1106,11 @@ _SCRIPT = """
       m.textContent = ul.classList.contains('open') ? 'less' : ('+'+m.dataset.n+' more');
     });
   });
-  // ✎ edit: toggle the inline edit form for a task.
+  // ✎ edit: toggle the inline edit form for a task or a person row.
   document.querySelectorAll('.edit-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var f=b.closest('.task').querySelector('.edit');
+    b.addEventListener('click', function(e){
+      e.stopPropagation();
+      var host=b.closest('.task, .prow'); var f=host&&host.querySelector('.edit');
       if(f) f.hidden=!f.hidden;
     });
   });
