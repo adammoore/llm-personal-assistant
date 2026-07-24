@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from lib.people import ranked_people
 from lib.pins import load_pins
 from lib.taskstore import load_tasks, repo_root
 
@@ -104,6 +105,10 @@ def gather(today: date, now: datetime) -> dict:
                              m.get("date") or ""), reverse=False)
     top_msgs = [m for m in weighted if m.get("context") in ("legal", "work", "consulting")][:4]
 
+    # People on the SAME attention scale as tasks — surface whoever most needs him.
+    people = ranked_people(set(pins.get("person", [])), today)
+    top_people = [p for p in people if p.get("_score", 0) >= 20][:3]
+
     return {
         "now": now, "today": today, "meetings": meetings,
         "overdue": [t for t in ranked if _due_state(t.get("due_date"), today) == "overdue"],
@@ -112,6 +117,7 @@ def gather(today: date, now: datetime) -> dict:
         "top_tasks": ranked[:5],
         "reminders": rem,
         "messages": top_msgs,
+        "people": top_people,
         "n_open": len(open_tasks),
     }
 
@@ -139,6 +145,9 @@ def _situation_text(g: dict) -> str:
         lines.append("Mail worth attention: "
                      + "; ".join(f"[{m['context']}] {m['who']}: {m['subject'][:40]}"
                                  for m in g["messages"]))
+    if g.get("people"):
+        lines.append("People needing attention: "
+                     + "; ".join(f"{p['name']} ({p['_reason']})" for p in g["people"]))
     return "\n".join(lines)
 
 
