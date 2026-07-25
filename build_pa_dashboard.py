@@ -316,61 +316,109 @@ def _activity_card() -> str:
                  collapsed=True)
 
 
-# ── The Field: a ZigZag×VKB view — items laid out in space by two chosen dimensions ─────────
-# ZigZag: everything is a cell connected along named dimensions; you view the structure along
-# any two of them. VKB: those two dimensions become a 2D plane and the cells render spatially,
-# meaning carried by position/proximity/colour, not by boxes. Re-pick a dimension → the whole
-# structure rotates. Node dimension values ride in data-* attributes; the layout is client-side
-# (see _FIELD_JS) so switching dimensions is instant.
-_FIELD_DIMS = ("context", "theme", "source", "priority", "when", "time")
+# ── The Nest: bounded, nested containers wired by visible connections ────────────────────────
+# Not a dot cloud (Adam: "useless sea of dots"). The lineage is Nelson's parallel Declaration of
+# Independence / Tinderbox / NoteCards FileBoxes: items live inside titled, bounded containers,
+# nested by dimension (context › theme), and clicking an item TRACES its links — curved lines to
+# everything it connects to (shared theme, or a person it names) across containers, transclusion
+# made visible. Each item carries `data-tags` (t:<theme>, p:<person>); the wiring is client-side.
+_CTX_ORDER = ("case", "work", "personal", "medical", "local-authority", "other")
+# Domain detection so contexts separate cleanly (else everything lands in 'personal').
+_NEST_LEGAL = ("court", "hearing", "fdr", "case", "family", "legal", "lv26", "urn", "redaction",
+               "solicitor", "isabella", "henry williams", "hayley", "liverpool county", "daniels",
+               " cora", "gwen", "isaac", "beverley", "jmw", "form e")
+_NEST_WORK = ("enact", "zigzag", "notch8", "westminster", "pathfinder", "cosector", "teams",
+              "slack", "outlook", "gorc", "maldreth", "rda")
+_NEST_MEDICAL = ("nhs", " gp ", "dentist", "medical", "surgery", "hospital", "health", "physio")
+_NEST_LA = ("council", "social care", "social work", "safeguard", "sefton", "children's services")
 
 
-def _when_band(time_iso: str | None, source: str, today: date) -> str:
-    day = (time_iso or "")[:10]
-    try:
-        delta = (date.fromisoformat(day) - today).days
-    except ValueError:
-        return "none"
-    if source == "task":
-        return ("overdue" if delta < 0 else "today" if delta == 0
-                else "soon" if delta <= 7 else "later")
-    return "today" if delta == 0 else "soon" if 0 < delta <= 7 else "past" if delta < 0 else "later"
+def _nest_domain(title: str, theme: str, base_ctx: str, refs: set) -> str:
+    hay = f"{title} {' '.join(refs)} {theme or ''}".lower()
+    if any(k in hay for k in _NEST_LEGAL):
+        return "case"
+    if any(k in hay for k in _NEST_WORK):
+        return "work"
+    if any(k in hay for k in _NEST_MEDICAL):
+        return "medical"
+    if any(k in hay for k in _NEST_LA):
+        return "local-authority"
+    return base_ctx or "personal"
 
 
-def _fnode(title: str, source: str, context: str, theme: str,
-           priority: str | None, when: str, time_iso: str | None) -> str:
-    color = _CTX_COLOR.get(context, "#64748B")
-    cls = "fnode big" if priority == "high" else "fnode"
-    return (f'<div class="{cls}" data-source="{_esc(source)}" data-context="{_esc(context)}" '
-            f'data-theme="{_esc(theme or "—")}" data-priority="{_esc(priority or "normal")}" '
-            f'data-when="{_esc(when)}" data-time="{_esc((time_iso or "")[:10])}" '
-            f'style="--c:{color}" title="{_esc(title)}">'
-            f'<span class="fdot"></span><span class="flabel">{_esc(title[:40])}</span></div>')
+def _people_ref_index() -> list[tuple[str, str]]:
+    """(match-token, person-name) pairs for spotting people named in item titles.
+
+    Full name plus distinctive tokens (≥4 chars); 'moore' excluded — too common in this family.
+    """
+    idx: list[tuple[str, str]] = []
+    for p in load_people():
+        nm = (p.get("name") or "").strip()
+        if not nm:
+            continue
+        idx.append((nm.lower(), nm))
+        for t in nm.split():
+            if len(t) >= 4 and t.lower() != "moore":
+                idx.append((t.lower(), nm))
+    return idx
 
 
 def _field_view(today: date) -> str:
-    nodes = [
-        _fnode(a.title, a.source, _ctx(a.theme, a.type if a.source == "task" else None),
-               (a.theme or "").lower(), a.priority, _when_band(a.timestamp, a.source, today),
-               a.timestamp)
-        for a in unified(days=21)[:60]]
-    nodes += [
-        _fnode(p["name"], "person", p.get("context") or "personal", "—",
-               p.get("priority"), "—", p.get("last_seen"))
-        for p in ranked_people(set(_PINS.get("person", [])))[:24]]
+    refidx = _people_ref_index()
+    nodes = []
+    for a in unified(days=21)[:70]:
+        low = a.title.lower()
+        refs = {nm for tok, nm in refidx if tok in low}
+        theme = (a.theme or "").lower()
+        base = _ctx(a.theme, a.type if a.source == "task" else None)
+        nodes.append({"title": a.title, "kind": a.source, "theme": theme, "refs": refs,
+                      "ctx": _nest_domain(a.title, theme, base, refs)})
+    for p in ranked_people(set(_PINS.get("person", [])))[:40]:
+        refs = {p["name"]}
+        nodes.append({"title": p["name"], "kind": "person", "theme": "", "refs": refs,
+                      "ctx": _nest_domain(p["name"], "", p.get("context") or "personal", refs)})
 
-    def picker(axis: str, default: str) -> str:
-        opts = "".join(f'<option value="{d}"{" selected" if d == default else ""}>{d}</option>'
-                       for d in _FIELD_DIMS)
-        return f'<select class="fdim" data-axis="{axis}">{opts}</select>'
+    def tags(n: dict) -> str:
+        # Delimited by '|' — person names contain spaces, so a space delimiter would split them.
+        out = ([f"t:{n['theme']}"] if n["theme"] else []) + [f"p:{r.lower()}" for r in n["refs"]]
+        return _esc("|".join(out))
+
+    # Group by context (outer container) › theme/people (inner container).
+    by_ctx: dict[str, list] = {}
+    for n in nodes:
+        by_ctx.setdefault(n["ctx"] or "other", []).append(n)
+    ctx_keys = ([c for c in _CTX_ORDER if c in by_ctx]
+                + [c for c in by_ctx if c not in _CTX_ORDER])
+
+    outer = []
+    for c in ctx_keys:
+        subs: dict[str, list] = {}
+        for n in by_ctx[c]:
+            sk = "people" if n["kind"] == "person" else (n["theme"] or "notes")
+            subs.setdefault(sk, []).append(n)
+        # people/themed sub-containers first, loose "notes" last
+        sub_keys = sorted(subs, key=lambda k: (k in ("notes",), k != "people", k))
+        sub_html = []
+        for sk in sub_keys:
+            chips = "".join(
+                f'<div class="fitem k-{_esc(n["kind"])}" data-tags="{tags(n)}" '
+                f'style="--c:{_CTX_COLOR.get(c, "#64748B")}" title="{_esc(n["title"])}">'
+                f'{_esc(n["title"][:38])}</div>' for n in subs[sk])
+            sub_html.append(
+                f'<div class="ctr sub"><div class="ctr-h">{_esc(sk)}'
+                f'<span class="ctr-n">{len(subs[sk])}</span></div>'
+                f'<div class="ctr-body">{chips}</div></div>')
+        outer.append(
+            f'<div class="ctr" data-ctx="{_esc(c)}" style="--c:{_CTX_COLOR.get(c, "#64748B")}">'
+            f'<div class="ctr-h ctr-top">{_esc(c)}</div>'
+            f'<div class="ctr-body">{"".join(sub_html)}</div></div>')
 
     return (
-        '<div id="field" class="field" hidden>'
-        f'<div class="field-ctl">arrange by {picker("x", "context")} <b>×</b> '
-        f'{picker("y", "when")}'
-        '<span class="field-hint">click a node to light its thread · re-pick a dimension to '
-        'rotate the space</span></div>'
-        f'<div class="field-plane">{"".join(nodes)}</div></div>')
+        '<div id="field" class="field nest" hidden>'
+        '<div class="field-ctl">connected containers · <b>click an item to trace its links</b>'
+        '<span class="field-hint">bounded &amp; nested, wired across contexts — Nelson / '
+        'Tinderbox</span></div>'
+        f'<div class="nest-plane"><svg class="nest-links"></svg>{"".join(outer)}</div></div>')
 
 
 def _work_card() -> str:
@@ -819,8 +867,8 @@ def _render_html(today: date) -> str:
         '<div class="prefs">'
         '<button id="layout-btn" title="grid ↔ spatial map (urgency · need · context)">'
         '⊞ grid</button>'
-        '<button id="field-btn" title="the Field — items in space by two chosen dimensions '
-        '(ZigZag × VKB)">✳ field</button>'
+        '<button id="field-btn" title="the Nest — bounded, nested containers wired by '
+        'connections (Nelson / Tinderbox)">✳ nest</button>'
         '<button id="theme-btn" title="cycle theme">◐ theme</button>'
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
@@ -1013,44 +1061,41 @@ main{ max-width:1100px; margin:0 auto; }
   background:transparent; color:var(--muted); }
 .pprio.p-high button{ color:#B45309; border-color:#B45309; font-weight:700; }
 .pprio.p-low button{ opacity:.6; }
-/* The Field — ZigZag × VKB spatial view */
+/* The Nest — bounded, nested containers wired by connections (Nelson / Tinderbox) */
 body.fieldmode .grid, body.fieldmode .brief, body.fieldmode .tstrip,
 body.fieldmode .deck, body.fieldmode .ctl, body.fieldmode .capture,
 body.fieldmode .facets, body.fieldmode #thread{ display:none; }
 .field{ margin:.5rem 0; }
 .field-ctl{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
-  font:.8rem/1 var(--mono); color:var(--muted); margin-bottom:.4rem; }
-.field-ctl select{ font:.78rem/1 var(--mono); padding:.2rem .4rem; border-radius:.4rem;
-  border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  font:.8rem/1 var(--mono); color:var(--muted); margin-bottom:.5rem; }
 .field-hint{ margin-left:auto; opacity:.75; }
-.field-plane{ position:relative; height:82vh; min-height:32rem; border:1px solid var(--line);
-  border-radius:.7rem; background:
-    radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/26px 26px, var(--card);
-  overflow:hidden; }
-.fnode{ position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center;
-  gap:.3rem; max-width:11rem; cursor:pointer; transition:left .5s cubic-bezier(.4,0,.2,1),
-  top .5s cubic-bezier(.4,0,.2,1), opacity .3s; z-index:2; }
-.fdot{ width:.62rem; height:.62rem; border-radius:50%; background:var(--c,#64748B);
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--c,#64748B) 22%, transparent); flex:0 0 auto; }
-.fnode.big .fdot{ width:.92rem; height:.92rem; }
-.flabel{ font:.72rem/1.15 var(--sans, inherit); color:var(--fg); white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; max-width:6.5rem;
-  background:color-mix(in srgb, var(--card) 82%, transparent);
-  padding:.05rem .2rem; border-radius:.25rem;
-  opacity:0; transition:opacity .14s; pointer-events:none; }
-/* Constellation first: dots always; labels reveal on hover / focus / lit (VKB detail-on-demand). */
-.fnode:hover{ z-index:6; }
-.fnode:hover .flabel, .fnode.lit .flabel, .fnode.big .flabel{ opacity:1; }
-.fnode:hover .flabel{ overflow:visible; white-space:normal; max-width:15rem; z-index:6;
-  box-shadow:0 2px 8px rgba(0,0,0,.14); }
-.fnode.lit .fdot{ box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 40%, transparent),
-  0 0 12px var(--c); }
-.fnode.lit .flabel{ font-weight:650; }
-.fnode.dim{ opacity:.22; }
-.faxis{ position:absolute; font:.6rem/1 var(--mono); text-transform:uppercase; letter-spacing:.05em;
-  color:var(--muted); opacity:.7; z-index:1; pointer-events:none; }
-.faxis.fx{ bottom:.3rem; transform:translateX(-50%); }
-.faxis.fy{ left:.3rem; transform:translateY(-50%); }
+.nest-plane{ position:relative; display:flex; flex-wrap:wrap; align-items:flex-start;
+  gap:.9rem; }
+.nest-links{ position:absolute; inset:0; z-index:5; pointer-events:none; overflow:visible; }
+.nlink{ fill:none; stroke:var(--accent,#2b7a6f); stroke-width:1.6; opacity:.7;
+  stroke-linecap:round; }
+/* Containers: bounded, titled, nestable. Outer = context (colour-keyed), inner = theme/people. */
+.ctr{ border:1px solid var(--line); border-radius:.6rem; background:var(--card);
+  flex:1 1 20rem; min-width:16rem; overflow:hidden; }
+.ctr[data-ctx]{ border-top:3px solid var(--c,#64748B); flex:1 1 22rem; }
+.ctr-h{ font:.66rem/1 var(--mono); letter-spacing:.05em; text-transform:uppercase;
+  color:var(--muted); padding:.42rem .6rem; display:flex; align-items:center; gap:.4rem;
+  border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--c,#64748B) 7%, var(--card)); }
+.ctr-top{ color:var(--c,#334155); font-weight:700; font-size:.72rem; }
+.ctr-n{ margin-left:auto; opacity:.65; }
+.ctr-body{ padding:.5rem; display:flex; flex-wrap:wrap; gap:.55rem; align-content:flex-start; }
+.ctr.sub{ flex:1 1 13rem; min-width:11rem; background:transparent; }
+.ctr.sub>.ctr-body{ padding:.4rem; }
+/* Items: readable chips held inside their container. */
+.fitem{ font:.74rem/1.25 var(--sans, inherit); color:var(--fg); cursor:pointer; position:relative;
+  padding:.26rem .5rem; border-radius:.4rem; border:1px solid var(--line);
+  background:var(--bg); border-left:3px solid var(--c,#64748B); max-width:100%;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:opacity .15s,box-shadow .15s; }
+.fitem.k-person{ border-radius:1rem; font-weight:600; }
+.fitem:hover{ box-shadow:0 1px 6px rgba(0,0,0,.12); overflow:visible; z-index:7; }
+.fitem.lit{ z-index:6; }
+.fitem.focus{ box-shadow:0 0 0 2px var(--c,#2b7a6f); font-weight:650; }
+.fitem.dim{ opacity:.28; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -1233,83 +1278,51 @@ _SCRIPT = """
   if(lb) lb.addEventListener('click', function(){
     setLayout(!document.body.classList.contains('spatial')); });
 
-  // ── The Field (ZigZag × VKB): lay items out in a 2D plane by two chosen dimensions ──
+  // ── The Nest: bounded nested containers, wired by traceable connections (Nelson-style) ──
   (function(){
     var field=document.getElementById('field'); if(!field) return;
-    var nodes=[].slice.call(field.querySelectorAll('.fnode'));
     var fb=document.getElementById('field-btn');
-    var xdim='context', ydim='when';
-    // Ordered dimensions read low→high along the axis; others are sorted alphabetically.
-    var ORD={when:['overdue','today','soon','later','past','none'],
-             priority:['high','normal','low','']};
-    var times=nodes.map(function(n){return Date.parse(n.dataset.time);})
-                   .filter(function(t){return !isNaN(t);});
-    var tmin=Math.min.apply(null,times), tmax=Math.max.apply(null,times);
-    function vals(dim){
-      if(ORD[dim]) return ORD[dim];
-      var s={}; nodes.forEach(function(n){ s[n.dataset[dim]||'—']=1; });
-      return Object.keys(s).sort();
-    }
-    function coord(dim,val){
-      if(dim==='time'){ var t=Date.parse(val);
-        return isNaN(t)?0.5:(tmax>tmin?(t-tmin)/(tmax-tmin):0.5); }
-      var vs=vals(dim), i=vs.indexOf(val); if(i<0) i=vs.length-1;
-      return vs.length>1 ? i/(vs.length-1) : 0.5;
-    }
-    function jit(i,s){ return (Math.sin(i*(s===0?12.9898:78.233))*43758.5453%1)*0.075; }
-    function layout(){
-      field.querySelectorAll('.faxis').forEach(function(e){e.remove();});
-      // Group nodes sharing a cell (same x,y) and pack each group into a small grid so they
-      // don't pile up — VKB-style spatial spread rather than an unreadable stack.
-      var cells={};
-      nodes.forEach(function(n){
-        var bx=coord(xdim, n.dataset[xdim]||'—'), by=coord(ydim, n.dataset[ydim]||'—');
-        var k=bx.toFixed(3)+'|'+by.toFixed(3);
-        (cells[k]=cells[k]||{bx:bx,by:by,g:[]}).g.push(n);
+    var plane=field.querySelector('.nest-plane');
+    var svg=field.querySelector('.nest-links');
+    var items=[].slice.call(field.querySelectorAll('.fitem'));
+    function tagsOf(el){ return (el.dataset.tags||'').split('|').filter(Boolean); }
+    function clear(){ while(svg.firstChild) svg.removeChild(svg.firstChild);
+      items.forEach(function(m){ m.classList.remove('lit','dim','focus'); }); }
+    function trace(el){
+      clear();
+      var mine=tagsOf(el); el.classList.add('lit','focus');
+      var pr=plane.getBoundingClientRect();
+      var W=plane.scrollWidth, H=plane.scrollHeight;
+      svg.setAttribute('viewBox','0 0 '+W+' '+H);
+      svg.style.width=W+'px'; svg.style.height=H+'px';
+      var a=el.getBoundingClientRect();
+      var ax=a.left-pr.left+a.width/2, ay=a.top-pr.top+a.height/2;
+      items.forEach(function(m){
+        if(m===el) return;
+        var shared=tagsOf(m).some(function(t){ return mine.indexOf(t)>=0; });
+        if(shared){
+          m.classList.add('lit');
+          var b=m.getBoundingClientRect();
+          var bx=b.left-pr.left+b.width/2, by=b.top-pr.top+b.height/2;
+          var mx=(ax+bx)/2, my=(ay+by)/2-Math.min(90,Math.abs(bx-ax)*0.16);
+          var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+          p.setAttribute('d','M'+ax+' '+ay+' Q'+mx+' '+my+' '+bx+' '+by);
+          p.setAttribute('class','nlink'); svg.appendChild(p);
+        } else { m.classList.add('dim'); }
       });
-      Object.keys(cells).forEach(function(k){
-        var c=cells[k], g=c.g, cols=Math.max(1,Math.ceil(Math.sqrt(g.length)));
-        var rows=Math.ceil(g.length/cols);
-        g.forEach(function(n,j){
-          var col=j%cols, row=Math.floor(j/cols);
-          var ox=(col-(cols-1)/2)*4.4, oy=(row-(rows-1)/2)*3.4;
-          n.style.left=Math.max(1,Math.min(97,7+c.bx*86+ox)).toFixed(2)+'%';
-          n.style.top =Math.max(2,Math.min(96,9+c.by*82+oy)).toFixed(2)+'%';
-        });
-      });
-      var plane=field.querySelector('.field-plane');
-      vals(xdim).forEach(function(v){ if(v==='—')return;
-        var l=document.createElement('span'); l.className='faxis fx'; l.textContent=v;
-        l.style.left=(7+coord(xdim,v)*86).toFixed(1)+'%'; plane.appendChild(l); });
-      vals(ydim).forEach(function(v){ if(v==='—')return;
-        var l=document.createElement('span'); l.className='faxis fy'; l.textContent=v;
-        l.style.top=(9+coord(ydim,v)*82).toFixed(1)+'%'; plane.appendChild(l); });
     }
-    field.querySelectorAll('.fdim').forEach(function(sel){
-      sel.addEventListener('change',function(){
-        if(sel.dataset.axis==='x') xdim=sel.value; else ydim=sel.value; layout(); });
-    });
-    // Follow a dimension: click a node → light everything sharing either axis value or its theme.
-    nodes.forEach(function(n){
-      n.addEventListener('click',function(){
-        var wasLit=n.classList.contains('lit');
-        nodes.forEach(function(m){ m.classList.remove('lit','dim'); });
-        if(wasLit) return;
-        // Light its thread: its exact cell (same on BOTH active axes = spatial neighbours) plus
-        // its theme-mates. Broad single-axis matches would light a whole row/column, so we don't.
-        var xv=n.dataset[xdim], yv=n.dataset[ydim], th=n.dataset.theme;
-        var realTheme=th && th!=='—';
-        nodes.forEach(function(m){
-          var sameCell=(m.dataset[xdim]===xv && m.dataset[ydim]===yv);
-          var sameTheme=realTheme && m.dataset.theme===th;
-          m.classList.add((m===n||sameCell||sameTheme)?'lit':'dim');
-        });
-      });
-    });
+    items.forEach(function(el){ el.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(el.classList.contains('focus')){ clear(); return; }
+      trace(el);
+    });});
+    plane.addEventListener('click', function(e){
+      if(e.target===plane || e.target===svg || e.target.classList.contains('ctr-body')) clear(); });
     function show(on){ document.body.classList.toggle('fieldmode', on);
-      field.hidden=!on; if(fb) fb.textContent=on?'▦ cards':'✳ field';
+      field.hidden=!on; if(fb) fb.textContent=on?'▦ cards':'✳ nest';
       localStorage.setItem('pa-field', on?'1':'0');
-      if(on){ if(document.body.classList.contains('spatial')) setLayout(false); layout(); } }
+      if(on && document.body.classList.contains('spatial')) setLayout(false);
+      if(!on) clear(); }
     if(fb) fb.addEventListener('click', function(){ show(field.hidden); });
     if(localStorage.getItem('pa-field')==='1') show(true);   // survive the 60s auto-refresh
   })();
