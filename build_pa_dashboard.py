@@ -1269,6 +1269,69 @@ _SCRIPT = """
       var b=f.querySelector('button'); b.textContent='pulling…'; b.disabled=true;
     });
   });
+
+  // ── Less-global interaction: update the DOM in place, don't full-reload/jump-to-top ──
+  try{ if('scrollRestoration' in history) history.scrollRestoration='manual'; }catch(e){}
+  // Restore scroll after any submit that DID reload (edit/breakdown/refresh/person-*).
+  try{ var _sy=sessionStorage.getItem('pa-scroll');
+    if(_sy){ sessionStorage.removeItem('pa-scroll'); requestAnimationFrame(function(){ window.scrollTo(0, parseInt(_sy,10)||0); }); }
+  }catch(e){}
+  window.addEventListener('beforeunload', function(){ try{ sessionStorage.setItem('pa-scroll', String(window.scrollY)); }catch(e){} });
+
+  function ajaxPost(form){
+    return fetch(form.action, {method:'POST', headers:{'X-PA-Ajax':'1'},
+      body:new URLSearchParams(new FormData(form))});
+  }
+  function bumpStat(sel, d){ var el=document.querySelector(sel);
+    if(el){ var n=parseInt(el.textContent,10); if(!isNaN(n)) el.textContent=Math.max(0,n+d); } }
+  // Complete / delete a task → fade out and remove ALL its DOM copies (the card renders each
+  // task twice: category grid + spatial-map band). No reload, scroll stays put.
+  document.querySelectorAll('form.done, form.del').forEach(function(f){
+    f.addEventListener('submit', function(e){
+      e.preventDefault();
+      var idInp=f.querySelector('input[name=id]'), id=idInp?idInp.value:null, lis=[];
+      if(id){ document.querySelectorAll('.task').forEach(function(t){
+        var i=t.querySelector('input[name=id]'); if(i && i.value===id) lis.push(t); }); }
+      else { var c=f.closest('.task'); if(c) lis.push(c); }
+      lis.forEach(function(li){ li.style.transition='opacity .22s ease, transform .22s ease';
+        li.style.opacity='0'; li.style.transform='translateX(10px)'; });
+      ajaxPost(f).then(function(){
+        setTimeout(function(){ lis.forEach(function(li){ li.remove(); }); }, 210);
+        bumpStat('.stat[data-act="filter:all"] .n', -1);
+      }).catch(function(){ lis.forEach(function(li){ li.style.opacity=''; li.style.transform=''; }); });
+    });
+  });
+  // Pin ★ toggle in place.
+  document.querySelectorAll('form.pin').forEach(function(f){
+    f.addEventListener('submit', function(e){ e.preventDefault();
+      ajaxPost(f).then(function(){ f.classList.toggle('on');
+        var b=f.querySelector('button'); if(b) b.textContent=f.classList.contains('on')?'★':'☆'; });
+    });
+  });
+  // Person priority chip cycles low→normal→high in place.
+  document.querySelectorAll('form.pprio').forEach(function(f){
+    f.addEventListener('submit', function(e){ e.preventDefault();
+      ajaxPost(f).then(function(){
+        var order=['low','normal','high'], cur='normal';
+        ['low','normal','high'].forEach(function(p){ if(f.classList.contains('p-'+p)) cur=p; });
+        var nxt=order[(order.indexOf(cur)+1)%3];
+        f.classList.remove('p-low','p-normal','p-high'); f.classList.add('p-'+nxt);
+        var b=f.querySelector('button'); if(b) b.textContent=nxt;
+      });
+    });
+  });
+  // Person kind toggle (👤 ↔ 🏢) in place.
+  document.querySelectorAll('form.pkind').forEach(function(f){
+    f.addEventListener('submit', function(e){ e.preventDefault();
+      ajaxPost(f).then(function(){
+        var inp=f.querySelector('input[name=kind]'), b=f.querySelector('button');
+        var became=inp?inp.value:'person';
+        if(b) b.textContent = became==='org' ? '🏢' : '👤';
+        if(inp) inp.value = became==='org' ? 'person' : 'org';  // next click flips back
+      });
+    });
+  });
+
   // Layout toggle — grid (by category) ↔ spatial map (urgency=height, need=size, context=colour).
   var lb=document.getElementById('layout-btn');
   function setLayout(sp){ document.body.classList.toggle('spatial', sp);

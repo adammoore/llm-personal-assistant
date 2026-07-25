@@ -23,10 +23,10 @@ from pathlib import Path
 # putting the repo root — one level up from this file — on the import path first.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib.comms import ACCOUNTS  # noqa: E402
-from lib.glance import load as glance_load  # noqa: E402
-from lib.onedrive import recent_files  # noqa: E402
-from lib.taskstore import load_tasks  # noqa: E402
+from lib.comms import ACCOUNTS
+from lib.glance import load as glance_load
+from lib.onedrive import recent_files
+from lib.taskstore import load_tasks
 
 # The sources an Activity can originate from (kept as a tuple for cheap validation).
 SOURCES = ("task", "calendar", "mail", "file", "work")
@@ -239,6 +239,36 @@ def from_work_cache(path: Path = _WORK_CACHE) -> list[Activity]:
     return activities
 
 
+# cider-store (the sibling knowledge/document/graph engine) may emit recent knowledge atoms in
+# the Activity shape. We read them like work_cache — never build our own doc store (cross-project
+# alignment: cider-store owns documents/embeddings/graph; the PA is the operating/UX layer).
+_CIDER_CACHE = Path.home() / "cider-outputs" / ".store" / "activity_cache.json"
+
+
+def from_cider() -> list[Activity]:
+    """Knowledge atoms from cider-store's activity_cache.json (if present) — read-only, defensive."""
+    try:
+        data = json.loads(_CIDER_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    out: list[Activity] = []
+    for a in items:
+        if not isinstance(a, dict) or not a.get("title"):
+            continue
+        out.append(Activity(
+            source=str(a.get("source") or "document"),
+            type=str(a.get("type") or "atom"),
+            timestamp=a.get("timestamp"),
+            title=str(a.get("title"))[:200],
+            theme=a.get("theme"),
+            priority=a.get("priority"),
+            url=a.get("url"),
+            meta={**(a.get("meta") or {}), "cider": True},
+        ))
+    return out
+
+
 def unified(days: int = 14) -> list[Activity]:
     """Merge all sources into one stream, newest/soonest-first.
 
@@ -251,6 +281,7 @@ def unified(days: int = 14) -> list[Activity]:
     activities.extend(from_messages())
     activities.extend(from_files(days))
     activities.extend(from_work_cache())
+    activities.extend(from_cider())
     activities.sort(key=_sort_key)
     return activities
 

@@ -177,7 +177,12 @@ class Handler(BaseHTTPRequestHandler):
                         _rebuild()
         except Exception:  # noqa: BLE001 — a bad form post must not kill the server
             pass
-        # Redirect back to the dashboard (Post/Redirect/Get).
+        # AJAX callers (the dashboard's own fetch) update the DOM themselves and don't want a
+        # navigation — reply 204 (no reload). Plain form posts get Post/Redirect/Get as before.
+        if self.headers.get("X-PA-Ajax"):
+            self.send_response(204)
+            self.end_headers()
+            return
         self.send_response(303)
         self.send_header("Location", "/")
         self.end_headers()
