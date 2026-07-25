@@ -86,6 +86,26 @@ def circle_for(interactions: int | None) -> str:
     return "peripheral"
 
 
+# ── Shared identity: person:<slug> (aligned with cider-store) ────────────────────────────────
+# cider-store's knowledge graph keys the four case principals as person:adam/cora/gwen/isaac
+# (short first-name slugs). We adopt the same scheme so the same real person has the SAME key in
+# both projects (multi-contextual identifier). Principals use the short slug; everyone else is
+# firstname-lastname. Same real person → same slug on purpose (duplicate entries share one).
+_PRINCIPAL_SLUG = {"adam": "adam", "cora": "cora", "gwen": "gwen", "isaac": "isaac"}
+
+
+def person_slug(name: str) -> str:
+    """The stable `person:<slug>` identity slug shared with cider-store (bare slug returned)."""
+    toks = [re.sub(r"[^a-z0-9]", "", t.lower()) for t in (name or "").split()]
+    toks = [t for t in toks if t]
+    if not toks:
+        return ""
+    low = (name or "").lower()
+    if toks[0] in _PRINCIPAL_SLUG and (toks[0] == "adam" or "vials" in low or "moore" in low):
+        return _PRINCIPAL_SLUG[toks[0]]
+    return "-".join([toks[0]] + ([toks[-1]] if len(toks) > 1 else []))
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -134,6 +154,7 @@ def upsert(people: list[dict], *, name: str, email: str | None = None,
             return p
     rec = {"id": _next_id(people), "name": name, "email": email, "context": context,
            "kind": classify_kind(name, email), "priority": "normal",
+           "slug": person_slug(name),
            "relationship": None, "birthday": None, "last_seen": last_seen,
            "notes": None, "themes": []}
     people.append(rec)
@@ -362,6 +383,9 @@ def classify_all(path: Path | None = None) -> int:
             touched += 1
         if not p.get("circle"):
             p["circle"] = circle_for(p.get("interactions"))
+            touched += 1
+        if not p.get("slug"):
+            p["slug"] = person_slug(p.get("name", ""))
             touched += 1
     if touched:
         save_people(people, path)
