@@ -37,7 +37,8 @@ CATEGORY_COLOR = {
     "Work": "#2E75B6", "Personal": "#7C5CBF", "Health": "#3FA796",
     "Finance": "#C08A2E", "Other": "#7A8290",
 }
-_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢", "work": "◈"}
+_ACTIVITY_GLYPH = {"task": "◇", "calendar": "▣", "mail": "✉", "file": "▢", "work": "◈",
+                   "meeting": "🎙", "document": "▤"}
 
 # The work-pull cache (skills/work-pull/pull.py --cache) drives the Work (Westminster) card.
 _WORK_CACHE = Path(__file__).resolve().parent / "data" / "work_cache.json"
@@ -331,7 +332,8 @@ _NEST_LEGAL = ("court", "hearing", "fdr", "case", "family", "legal", "lv26", "ur
                " cora", "gwen", "isaac", "beverley", "jmw", "form e")
 _NEST_WORK = ("enact", "zigzag", "notch8", "westminster", "pathfinder", "cosector", "teams",
               "slack", "outlook", "gorc", "maldreth", "rda")
-_NEST_MEDICAL = ("nhs", " gp ", "dentist", "medical", "surgery", "hospital", "health", "physio")
+_NEST_MEDICAL = ("nhs", " gp ", "dentist", "medical", "surgery", "hospital", "health", "physio",
+                 "camhs", "alder hey")
 _NEST_LA = ("council", "social care", "social work", "safeguard", "sefton", "children's services")
 
 
@@ -368,13 +370,16 @@ def _people_ref_index() -> list[tuple[str, str]]:
 def _field_view(today: date) -> str:
     refidx = _people_ref_index()
     nodes = []
-    for a in unified(days=21)[:70]:
+    for a in unified(days=21)[:80]:
         low = a.title.lower()
         refs = {nm for tok, nm in refidx if tok in low}
         theme = (a.theme or "").lower()
         base = _ctx(a.theme, a.type if a.source == "task" else None)
+        # Meetings arrive pre-classified (agent-tagged context) — respect it over re-derivation.
+        ctx = ((a.meta or {}).get("context") if a.source == "meeting" else None) \
+            or _nest_domain(a.title, theme, base, refs)
         nodes.append({"title": a.title, "kind": a.source, "theme": theme, "refs": refs,
-                      "ctx": _nest_domain(a.title, theme, base, refs)})
+                      "ctx": ctx})
     for p in ranked_people(set(_PINS.get("person", [])))[:40]:
         refs = {p["name"]}
         nodes.append({"title": p["name"], "kind": "person", "theme": "", "refs": refs,

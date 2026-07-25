@@ -1,0 +1,449 @@
+{
+  "generated": "2026-07-25",
+  "source": "claude.ai Granola connector",
+  "count": 34,
+  "items": [
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-23",
+      "title": "Enact demo, scope, and capacity planning with Cosector team",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "45cc2697-af63-4054-9386-30330972972d",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-23",
+      "title": "Guided deposit workflow demo and feedback — usability, licensing, and staging access",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "4f62aa76-43f9-469f-8cea-73526e4fc049",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-23",
+      "title": "Institutional repository access, rights framework, and SSO testing",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "4cef1416-9887-4a07-ba48-7a1bde397a0a",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-23",
+      "title": "Repository licensing framework — metadata, process, outputs, and rights",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "69acb02d-1265-4735-8cff-e9f87942aeac",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-22",
+      "title": "Notes from family court",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "b697d0f4-33b2-4271-8d47-6a6e42443dad",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-21",
+      "title": "Family court strategy — non-molestation order, parental access, and section 37 with Isabella",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "3f14171d-bb0a-4026-a882-ea8efc5f2b49",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-21",
+      "title": "Pathfinders UAT planning, staffing, and budget recovery with manager",
+      "theme": "pathfinders",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "a8c527c1-9bdc-4186-8a94-a0767ee2f690",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-16",
+      "title": "Enact branding — logo design, color scheme, and typography refinement",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "001e8123-f7cb-473c-8fac-b4c978efd389",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-16",
+      "title": "Draft mode design and multi-component visibility strategy",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "02bd8502-b113-4299-a636-1577b1888910",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-16",
+      "title": "Project costing, staffing, and pathfinder engagement strategy",
+      "theme": "pathfinders",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "9f7110c8-5d3b-4c38-b99a-f862d354e86a",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-16",
+      "title": "PR Voices — metadata, ethics, and pathfinder coordination with Rory",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "02011dc9-caaf-4653-9871-3fef4a156997",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-16",
+      "title": "Pathfinder repository scope and content structure",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "35348c98-ef57-4b6d-9593-3c29bec53866",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-15",
+      "title": "Legal strategy — family court submission, police investigation update, and bail timeline",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "234d93b2-d7ec-4992-bc58-343d12df181e",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-15",
+      "title": "Pathfinder cohort onboarding — repository structure and ref submissions with Sarah",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "154d664a-e72e-47c1-9de0-d0a0978c2326",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-15",
+      "title": "Call with Danny — legal service delivery and correspondence address",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "40c79d44-7724-44c7-8666-f73f19143201",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-14",
+      "title": "Family court strategy — allegations, misrepresentation, and police response",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "3151499f-912c-4fc1-8051-2ef98f75a538",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-14",
+      "title": "Enact project planning — staffing, finances, and pathfinder feedback",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "61bb4f2d-429e-4f52-b90e-6d18ebbbce1b",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-10",
+      "title": "Collaboration agreement and data protection — ENACT project with Karen",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "7bf64092-a30e-4e80-a45f-d7bb3752dc79",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-10",
+      "title": "Enact repository — feedback on design, licensing, and community features with pathfinders",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "d63c6192-973f-4527-8b12-0bf3e6579e00",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-09",
+      "title": "FAIR repository demo — SSO setup, metadata changes, and UI themes",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "96160f32-868c-42ea-b044-2fd595b24fa1",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-09",
+      "title": "Jenny project check-in — workload, communication, and team dynamics with Victoria",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "7832ed83-dbec-4cb0-9f96-bcf73b808d7d",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-09",
+      "title": "FAIA and ISCC projects — alignment, PIDFest meeting, and document edits",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "39c72425-e48a-46ef-9fd8-49483b33ebf1",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-09",
+      "title": "DPIA review, privacy notices, and project board prep with Nicola and team",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "36f326df-25f8-4734-9c73-89cf48833bbb",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-09",
+      "title": "Scott feedback and system priorities with Matt Paddington",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "d75f955d-a565-4055-afa8-d694c94c7b97",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-08",
+      "title": "Haiku system testing and metadata workflow with Scott and Rory",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "1319a591-ce8d-4f5e-a76c-9f1dd480653f",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-07",
+      "title": "M3 metadata profile — schema review and form field rationalization",
+      "theme": "repository",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "4c10f210-ed83-464d-ad06-62d8ad3a333c",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-07",
+      "title": "VIALS MOORE CORE GROUP (DAD)",
+      "theme": "family-court",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "f9412fbb-9cdc-4686-a4bf-77a8346bdc9d",
+        "context": "case"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-07",
+      "title": "IDAH logo design — concepts, feedback, and next steps",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "9d5fdad9-9e77-49af-80df-bb4273a1210c",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-07",
+      "title": "Enact authentication and metadata configuration — SSO, access tiers, pathfinder onboarding",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "b390f200-0e56-44ab-9ba4-a537f9711eef",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-07",
+      "title": "Enact project — blog content, mailing list moderation, and Pathfinders planning with Victoria",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "b237099a-9a76-495c-a3df-87a32963f226",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-06",
+      "title": "Staff transition and handover plan with Vicki Dwyer",
+      "theme": "work",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "20220bd8-fd92-4733-acb2-f36a1d19d74b",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-06",
+      "title": "Enact soft launch — practice research infrastructure, pathfinders, and repository overview",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "de7bb454-471d-471b-bf50-197370f48fa7",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-06",
+      "title": "Enact launch event — Pathfinders prep and team introductions",
+      "theme": "enact",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "b8bd3809-8e83-4c61-aaac-29c0b0f16d9c",
+        "context": "work"
+      }
+    },
+    {
+      "source": "meeting",
+      "type": "granola",
+      "timestamp": "2026-07-03",
+      "title": "CAMHS - parent only meeting",
+      "theme": "camhs",
+      "priority": null,
+      "url": null,
+      "meta": {
+        "id": "e1a91d14-999b-4b4c-a983-8f5fb2e2eecd",
+        "context": "medical"
+      }
+    }
+  ]
+}

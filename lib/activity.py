@@ -245,6 +245,41 @@ def from_work_cache(path: Path = _WORK_CACHE) -> list[Activity]:
 _CIDER_CACHE = Path.home() / "cider-outputs" / ".store" / "activity_cache.json"
 
 
+_GRANOLA_CACHE = Path(__file__).resolve().parents[1] / "data" / "granola_cache.json"
+
+
+def from_granola(days: int = 21) -> list[Activity]:
+    """Recent Granola meetings (all themes) from a themed cache — read-only, defensive.
+
+    The claude.ai Granola connector is agent-only (a launchd builder can't reach it), so an agent
+    writes `data/granola_cache.json` (Activity-shaped, context-tagged) and this reads it like
+    work_cache. Meetings span work/personal/case — context lands each in the right Nest container.
+    """
+    try:
+        data = json.loads(_GRANOLA_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    items = data.get("items", []) if isinstance(data, dict) else []
+    cutoff = ""
+    out: list[Activity] = []
+    for m in items:
+        if not isinstance(m, dict) or not m.get("title"):
+            continue
+        out.append(Activity(
+            source="meeting", type=str(m.get("type") or "granola"),
+            timestamp=m.get("timestamp"), title=str(m.get("title"))[:160],
+            theme=m.get("theme"), priority=m.get("priority"), url=m.get("url"),
+            meta={**(m.get("meta") or {}), "granola": True}))
+    # keep the recent window (cheap: string compare on ISO dates)
+    if days:
+        from datetime import date, timedelta
+        try:
+            cutoff = (date.today() - timedelta(days=days)).isoformat()
+        except (ValueError, OSError):
+            cutoff = ""
+    return [a for a in out if not cutoff or (a.timestamp or "")[:10] >= cutoff]
+
+
 def from_cider() -> list[Activity]:
     """Knowledge atoms from cider-store's activity_cache.json (if present) — read-only, defensive."""
     try:
@@ -281,6 +316,7 @@ def unified(days: int = 14) -> list[Activity]:
     activities.extend(from_messages())
     activities.extend(from_files(days))
     activities.extend(from_work_cache())
+    activities.extend(from_granola(days))
     activities.extend(from_cider())
     activities.sort(key=_sort_key)
     return activities
