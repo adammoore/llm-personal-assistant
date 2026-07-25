@@ -28,6 +28,7 @@ from lib.brief import load_brief
 from lib.comms import ACCOUNTS
 from lib.glance import load as glance_load
 from lib.mailsummary import load_summary
+from lib import cider
 from lib.people import CIRCLES, load_people, ranked_people
 from lib.pins import load_pins
 from lib.taskstore import CATEGORIES, load_tasks, repo_root
@@ -323,6 +324,7 @@ def _activity_card() -> str:
 # everything it connects to (shared theme, or a person it names) across containers, transclusion
 # made visible. Each item carries `data-tags` (t:<theme>, p:<person>); the wiring is client-side.
 _CTX_ORDER = ("case", "work", "personal", "medical", "local-authority", "other")
+_PRINCIPAL_SLUGS = frozenset({"adam", "cora", "gwen", "isaac"})  # in cider-store's graph
 # Domain detection so contexts separate cleanly (else everything lands in 'personal').
 _NEST_LEGAL = ("court", "hearing", "fdr", "case", "family", "legal", "lv26", "urn", "redaction",
                "solicitor", "isabella", "henry williams", "hayley", "liverpool county", "daniels",
@@ -376,12 +378,41 @@ def _field_view(today: date) -> str:
     for p in ranked_people(set(_PINS.get("person", [])))[:40]:
         refs = {p["name"]}
         nodes.append({"title": p["name"], "kind": "person", "theme": "", "refs": refs,
+                      "slug": p.get("slug"),
                       "ctx": _nest_domain(p["name"], "", p.get("context") or "personal", refs)})
 
     def tags(n: dict) -> str:
         # Delimited by '|' — person names contain spaces, so a space delimiter would split them.
         out = ([f"t:{n['theme']}"] if n["theme"] else []) + [f"p:{r.lower()}" for r in n["refs"]]
+        if n.get("slug"):                                  # slug tag wires people ↔ cider claims
+            out.append(f"s:{n['slug']}")
         return _esc("|".join(out))
+
+    # Gated case-evidence layer: the case principals' claim graph, read from cider-store (read-only,
+    # "visitation"). Off by default (the wall) — revealed by the ⚖ case toggle; Adam's private view.
+    principals = {n["slug"] for n in nodes if n["kind"] == "person"
+                  and n.get("slug") in _PRINCIPAL_SLUGS}
+    claims: dict[str, dict] = {}
+    if cider.available():
+        for slug in sorted(principals):
+            for cl in cider.person_claims(slug):
+                e = claims.setdefault(cl["id"], {"label": cl["label"], "status": cl["status"],
+                                                 "slugs": set()})
+                e["slugs"].add(slug)
+
+    def _claim_sub() -> str:
+        if not claims:
+            return ""
+        chips = ""
+        for e in claims.values():
+            st = (e["status"] or "").split()[0].lower() if e["status"] else ""
+            wire = "|".join(f"s:{s}" for s in sorted(e["slugs"]))
+            chips += (f'<div class="fitem k-claim st-{_esc(st)}" data-tags="{_esc(wire)}" '
+                      f'title="{_esc(e["label"])} [{_esc(e["status"])}]">'
+                      f'⚖ {_esc(e["label"][:52])}</div>')
+        return (f'<div class="ctr sub case-ev"><div class="ctr-h">⚖ case evidence · cider'
+                f'<span class="ctr-n">{len(claims)}</span></div>'
+                f'<div class="ctr-body">{chips}</div></div>')
 
     # Group by context (outer container) › theme/people (inner container).
     by_ctx: dict[str, list] = {}
@@ -408,6 +439,8 @@ def _field_view(today: date) -> str:
                 f'<div class="ctr sub"><div class="ctr-h">{_esc(sk)}'
                 f'<span class="ctr-n">{len(subs[sk])}</span></div>'
                 f'<div class="ctr-body">{chips}</div></div>')
+        if c == "case":                                    # attach the gated evidence sub-container
+            sub_html.append(_claim_sub())
         outer.append(
             f'<div class="ctr" data-ctx="{_esc(c)}" style="--c:{_CTX_COLOR.get(c, "#64748B")}">'
             f'<div class="ctr-h ctr-top">{_esc(c)}</div>'
@@ -869,6 +902,8 @@ def _render_html(today: date) -> str:
         '⊞ grid</button>'
         '<button id="field-btn" title="the Nest — bounded, nested containers wired by '
         'connections (Nelson / Tinderbox)">✳ nest</button>'
+        '<button id="case-btn" title="reveal the gated case-evidence layer in the Nest '
+        '(cider-store claim graph — private)">⚖ case</button>'
         '<button id="theme-btn" title="cycle theme">◐ theme</button>'
         '<button id="fs-dn" title="smaller text">A−</button>'
         '<button id="fs-up" title="larger text">A+</button></div></header>'
@@ -1096,6 +1131,17 @@ body.fieldmode .facets, body.fieldmode #thread{ display:none; }
 .fitem.lit{ z-index:6; }
 .fitem.focus{ box-shadow:0 0 0 2px var(--c,#2b7a6f); font-weight:650; }
 .fitem.dim{ opacity:.28; }
+/* Gated case-evidence layer — off unless ⚖ case is on. Adam's private view only. */
+.case-ev{ display:none; }
+body.casemode .case-ev{ display:block; }
+.case-ev>.ctr-h{ color:#B45309; border-color:#B45309;
+  background:color-mix(in srgb, #B45309 8%, var(--card)); }
+.fitem.k-claim{ border-left-color:#B45309; background:color-mix(in srgb,#B45309 5%,var(--bg));
+  white-space:normal; max-width:16rem; }
+.fitem.k-claim.st-contradicted, .fitem.k-claim.st-unsubstantiated,
+.fitem.k-claim.st-unfounded{ border-left-color:#15803D; }
+.fitem.k-claim.st-pending, .fitem.k-claim.st-disputed{ border-left-color:#B45309; }
+#case-btn.on{ color:#B45309; border-color:#B45309; font-weight:650; }
 .task{ padding:.3rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .task:first-child{ border-top:none; }
 .t-row{ display:flex; align-items:center; gap:.55rem; }
@@ -1361,7 +1407,7 @@ _SCRIPT = """
       var a=el.getBoundingClientRect();
       var ax=a.left-pr.left+a.width/2, ay=a.top-pr.top+a.height/2;
       items.forEach(function(m){
-        if(m===el) return;
+        if(m===el || m.offsetParent===null) return;   // skip self + gated/hidden (e.g. case-off)
         var shared=tagsOf(m).some(function(t){ return mine.indexOf(t)>=0; });
         if(shared){
           m.classList.add('lit');
@@ -1388,6 +1434,14 @@ _SCRIPT = """
       if(!on) clear(); }
     if(fb) fb.addEventListener('click', function(){ show(field.hidden); });
     if(localStorage.getItem('pa-field')==='1') show(true);   // survive the 60s auto-refresh
+    // ⚖ case: reveal the gated case-evidence layer (off by default — the wall). Persisted.
+    var cb=document.getElementById('case-btn');
+    function caseMode(on){ document.body.classList.toggle('casemode', on);
+      if(cb) cb.classList.toggle('on', on); localStorage.setItem('pa-case', on?'1':'0');
+      clear(); if(on && field.hidden) show(true); }
+    if(cb) cb.addEventListener('click', function(){
+      caseMode(!document.body.classList.contains('casemode')); });
+    if(localStorage.getItem('pa-case')==='1') caseMode(true);
   })();
 
   // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
