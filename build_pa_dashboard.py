@@ -111,6 +111,26 @@ def _card(key: str, title: str, count: str, body: str, *, collapsed: bool = Fals
             f'<div class="card-b">{body}</div></section>')
 
 
+def _details(gid: str, label: str, body: str, *, count: int | str = "",
+             open_default: bool = True, cls: str = "") -> str:
+    """A collapsible group (native <details>) so each category/band/circle folds on its own.
+
+    Default open state is a calm first impression (urgent groups open, long tails closed); the
+    per-group choice then persists (localStorage, keyed by `gid`) so Adam's curation sticks.
+    """
+    n = f'<span class="grp-n">{_esc(str(count))}</span>' if count != "" else ""
+    op = " open" if open_default else ""
+    return (f'<details class="grp {cls}" data-grp="{_esc(gid)}"{op}>'
+            f'<summary class="sub grp-h">{_esc(label)}{n}'
+            f'<span class="grp-chev">▾</span></summary>{body}</details>')
+
+
+def _is_urgent(t: dict, today: date) -> bool:
+    """A task worth surfacing by default — high priority, or overdue / due today."""
+    return (t.get("priority") == "high"
+            or _due_state(t.get("due_date"), today) in ("overdue", "today"))
+
+
 def _work_events_for(day_iso: str) -> list[dict]:
     """Westminster Outlook events for a given ISO day, from the work-pull cache."""
     try:
@@ -244,18 +264,21 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
     if not open_tasks:
         return _card("tasks", "Tasks", "", '<p class="empty">Clear slate. ✨</p>')
 
-    # Grid grouping: by category (the predictable default).
+    # Grid grouping: by category (the predictable default). Each category folds on its own —
+    # open by default only if it holds something urgent, so the first view is calm.
     cat = []
     for category in CATEGORIES:
         grp = [t for t in open_tasks if (t.get("category") or "Other") == category]
         if not grp:
             continue
         grp.sort(key=lambda x: (x.get("due_date") or "9999", x["id"]))
-        cat.append(f'<div class="sub">{_esc(category)}</div>'
-                   f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul>')
+        cat.append(_details(
+            f"task-cat-{category}", category,
+            f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul>',
+            count=len(grp), open_default=any(_is_urgent(t, today) for t in grp)))
     cat_html = f'<div class="grouping cat">{"".join(cat)}</div>'
 
-    # Spatial grouping: by urgency band (height = urgency). Same tasks, meaning from position.
+    # Spatial grouping: by urgency band. Near bands open, the long tail (Soon/Someday) folded.
     urg = []
     for key, label in (("now", "Now"), ("next", "Next · 1–3 days"),
                        ("soon", "Soon · 2 weeks"), ("someday", "Someday")):
@@ -264,9 +287,10 @@ def _tasks_card(today: date, open_tasks: list[dict]) -> str:
             continue
         grp.sort(key=lambda x: (_PRIO_RANK.get(x.get("priority"), 1),
                                 x.get("due_date") or "9999", x["id"]))
-        urg.append(f'<div class="band" data-band="{key}"><div class="band-h">{_esc(label)}'
-                   f'<span class="band-n">{len(grp)}</span></div>'
-                   f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul></div>')
+        urg.append(_details(
+            f"task-band-{key}", label,
+            f'<ul class="tasks">{"".join(_task_li(t, today) for t in grp)}</ul>',
+            count=len(grp), open_default=key in ("now", "next"), cls="band"))
     urg_html = f'<div class="grouping urg">{"".join(urg)}</div>'
 
     return _card("tasks", "Tasks", str(len(open_tasks)), cat_html + urg_html)
@@ -691,8 +715,10 @@ def _people_card() -> str:
         if not grp:
             continue
         rows = "".join(_person_row(p) for p in grp)
-        blocks.append(f'<div class="sub">{circle} · {len(grp)}</div>'
-                      f'<ul class="rows">{rows}</ul>')
+        # inner circle open by default; the long tail (wider/peripheral) folded until wanted.
+        blocks.append(_details(f"people-circle-{circle}", circle,
+                               f'<ul class="rows">{rows}</ul>', count=len(grp),
+                               open_default=circle in ("inner", "close")))
     return _card("people", "People", str(total), "".join(blocks), collapsed=True)
 
 
@@ -1011,6 +1037,19 @@ main{ max-width:1100px; margin:0 auto; }
 .card-b{ padding:.1rem .85rem .7rem; }
 .sub{ font:.62rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
   color:var(--muted); margin:.6rem 0 .3rem; }
+/* Collapsible groups (<details>) — each category / band / circle folds on its own. */
+.grp{ margin:.15rem 0; }
+summary.sub.grp-h{ display:flex; align-items:center; gap:.35rem; cursor:pointer;
+  list-style:none; margin:.5rem 0 .25rem; padding:.15rem 0; user-select:none; }
+summary.sub.grp-h::-webkit-details-marker{ display:none; }
+summary.sub.grp-h::marker{ content:""; }
+summary.sub.grp-h:hover{ color:var(--fg); }
+.grp-n{ margin-left:.1rem; opacity:.6; font-variant-numeric:tabular-nums;
+  background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:0 .38rem; }
+.grp-chev{ margin-left:auto; font-size:.62rem; color:var(--muted);
+  transform:rotate(-90deg); transition:transform .15s; }
+details.grp[open]>summary .grp-chev{ transform:rotate(0); }
+details.grp:not([open])>summary.sub{ color:var(--muted); opacity:.85; }
 .rows,.tasks{ list-style:none; margin:0; padding:0; }
 .row{ display:flex; gap:.55rem; padding:.28rem 0; border-top:1px solid var(--line); font-size:.9rem; }
 .row:first-child{ border-top:none; }
@@ -1449,6 +1488,13 @@ _SCRIPT = """
     if(localStorage.getItem('pa-case')==='1') caseMode(true);
   })();
 
+  // Collapsible groups: restore each <details.grp>'s remembered open/closed state; persist on toggle.
+  document.querySelectorAll('details.grp[data-grp]').forEach(function(d){
+    var k='pa-grp-'+d.dataset.grp, saved=localStorage.getItem(k);
+    if(saved==='1') d.open=true; else if(saved==='0') d.open=false;   // else keep server default
+    d.addEventListener('toggle', function(){ localStorage.setItem(k, d.open?'1':'0'); });
+  });
+
   // Facet bar — one active facet at a time; each pivot is single-focus (DESIGN.md).
   function applyFacet(f){
     f=f||'all';
@@ -1473,12 +1519,13 @@ _SCRIPT = """
           .forEach(function(el){ el.style.display=(el.dataset[attr]===val)?'':'none'; });
       }
     }
-    document.querySelectorAll('.card[data-key="tasks"] .sub').forEach(function(sub){
-      var ul=sub.nextElementSibling;
-      if(ul&&ul.classList.contains('tasks')){
-        var any=[].some.call(ul.querySelectorAll('.task'),function(t){return t.style.display!=='none';});
-        sub.style.display=any?'':'none';
-      }
+    var facetActive=(f&&f!=='all');
+    document.querySelectorAll('.card[data-key="tasks"] details.grp').forEach(function(d){
+      var vis=[].some.call(d.querySelectorAll('.task'),function(t){return t.style.display!=='none';});
+      d.style.display=vis?'':'none';
+      if(facetActive){ if(vis) d.open=true; }        // reveal matches even in a folded group
+      else{ var s=localStorage.getItem('pa-grp-'+d.dataset.grp);   // cleared → restore choice
+            if(s!==null) d.open=(s==='1'); }
     });
     document.querySelectorAll('.facets button').forEach(function(b){
       b.classList.toggle('facet-on', b.dataset.facet===f); });
