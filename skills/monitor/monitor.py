@@ -28,13 +28,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.comms import ACCOUNTS, calendar_events, fetch_inbox, partition_inbox  # noqa: E402
-from lib.state import (  # noqa: E402
-    already_nudged, load_state, mark_retracted, pending_mail_nudges, rate_state,
-    record_mail_nudge, record_nudge, repo_root, save_state,
+from lib.comms import (
+    ACCOUNTS,
+    calendar_events,
+    fetch_inbox,
+    partition_inbox,
 )
-from lib.imessage import captures as imessage_captures  # noqa: E402
-from lib.taskstore import add_task, load_tasks  # noqa: E402
+from lib.imessage import captures as imessage_captures
+from lib.state import (
+    already_nudged,
+    load_state,
+    mark_retracted,
+    pending_mail_nudges,
+    rate_state,
+    record_mail_nudge,
+    record_nudge,
+    repo_root,
+    save_state,
+)
+from lib.taskstore import add_task, load_tasks
 
 # Defaults (mirrored in autonomy.yaml `monitor:` for documentation).
 IMMINENT_MIN = 15          # calendar: warn this many minutes ahead
@@ -294,13 +306,19 @@ def capture_imessage(state: dict, *, dry: bool) -> list[str]:
     last = state.get("last_imessage_rowid", 0)
     caps, top = imessage_captures(last)
     state["last_imessage_rowid"] = top
+    # Dedup safety net: the rowid watermark is the primary guard, but if it's ever lost (e.g. a
+    # failed state write when the disk was full), capture would otherwise re-add every historical
+    # prefixed message. Skip texts that already exist as an open iMessage-captured task.
+    existing = {(t.get("title") or "").strip().lower() for t in load_tasks()
+                if not t.get("completed") and t.get("source") == "imessage"}
     done = []
     for c in caps:
         text = c.get("text", "").strip()
-        if not text:
+        if not text or text.lower() in existing:
             continue
         if not dry:
             add_task(text, source="imessage")
+        existing.add(text.lower())
         done.append(text)
     return done
 
