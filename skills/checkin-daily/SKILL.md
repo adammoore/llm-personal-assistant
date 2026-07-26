@@ -25,6 +25,15 @@ nothing.
    with noise counted + hidden), and tasks due today/overdue. It also writes a daily-note
    stub at `data/daily/<date>.md`.
 
+   **Refresh Granola meetings** (do it here — the connector is agent-only, so the morning
+   check-in is where the meeting cache stays fresh; the launchd builder can't reach it):
+   call `mcp__claude_ai_Granola__list_meetings` (`time_range: last_30_days`), then persist with
+   `lib.granola.write_cache([{ "id", "title", "date" }], generated=<today ISO>)`. This themes
+   each meeting (case / medical / else work) into `data/granola_cache.json`, which the timeline
+   and Nest read. If the connector is unavailable (headless/offline), skip silently — the
+   previous cache stays valid. Meetings span all themes, but **do not** pull case meeting
+   *content* into PA notes (see Notes).
+
 2. **Frame it warmly.** Present the glance as an offer ("Here's today — want to look?").
    Refine the inbox shortlist with judgement: **lift genuinely important mail** — replies to
    Adam, real people, institutions/solicitors (e.g. Henry Williams) — and quietly demote any
