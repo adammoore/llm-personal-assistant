@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -109,6 +109,14 @@ def gather(today: date, now: datetime) -> dict:
     people = ranked_people(set(pins.get("person", [])), today)
     top_people = [p for p in people if p.get("_score", 0) >= 20][:3]
 
+    # Recent Granola meetings (all themes) — light continuity, last 2 days, to reconnect threads.
+    recent_cut = (today - timedelta(days=2)).isoformat()
+    gmeet = _read_cache("granola_cache.json").get("items", [])
+    recent_meetings = sorted(
+        {((m.get("timestamp") or "")[:10], m.get("title", "")) for m in gmeet
+         if (m.get("timestamp") or "")[:10] >= recent_cut and m.get("title")},
+        reverse=True)[:3]
+
     return {
         "now": now, "today": today, "meetings": meetings,
         "overdue": [t for t in ranked if _due_state(t.get("due_date"), today) == "overdue"],
@@ -118,6 +126,7 @@ def gather(today: date, now: datetime) -> dict:
         "reminders": rem,
         "messages": top_msgs,
         "people": top_people,
+        "recent_meetings": recent_meetings,
         "n_open": len(open_tasks),
     }
 
@@ -148,6 +157,9 @@ def _situation_text(g: dict) -> str:
     if g.get("people"):
         lines.append("People needing attention: "
                      + "; ".join(f"{p['name']} ({p['_reason']})" for p in g["people"]))
+    if g.get("recent_meetings"):
+        lines.append("Recently discussed (for continuity): "
+                     + "; ".join(f"{ti[:44]}" for _d, ti in g["recent_meetings"]))
     return "\n".join(lines)
 
 

@@ -29,6 +29,28 @@ python3 skills/focus/focus.py Case --push-note --signal
 - `--push-note` writes a `Focus — <theme>` Apple Note that iCloud-syncs to the phone.
 - `--signal` sends a one-line summary (task count, top item) to Signal.
 
+## Deepen with cider evidence (optional, gated)
+
+After the focused view, you can pull **provenance-backed knowledge** for the theme from
+cider-store (the sibling knowledge/document/graph engine) via its MCP tools — turning focus from
+"my tasks/dates/messages" into "…and what I actually know about this."
+
+1. `mcp__adam-mcp__store_search(query="<theme> <what Adam's focusing on>", top_k=6)` — hybrid
+   semantic+keyword over the corpus; each chunk carries its `source_path` (provenance).
+2. **Honour the wall** — pass results through `lib.wall.filter_results(results, allow_case=…)`:
+   ```python
+   from lib.wall import filter_results, wants_case
+   hits = filter_results(store_search_results, allow_case=wants_case("<theme>"))
+   ```
+   A **case/legal/medical** focus is a deliberate ask → `allow_case=True` (the gated reveal). Any
+   other theme → walled chunks are dropped, so case content never leaks into a work/personal focus.
+3. Surface the top 3–4 as **"related evidence"** — a one-line gist + its source document. For a
+   case focus you may also `mcp__adam-mcp__graph_neighbours("person:<slug>")` /
+   `graph_path(...)` to show claim/contradiction chains with provenance.
+
+**Read-only, always.** Reference in place with provenance; never draft legal content, never apply
+legal-team-only analytical labels, never write into CIDER. This is recall for Adam's own eyes.
+
 ## Setting up themes
 
 Themes are just tags on tasks — capture with `--theme`:
