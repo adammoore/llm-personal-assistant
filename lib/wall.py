@@ -26,9 +26,13 @@ OPEN = ("personal", "work")
 WALLED = ("case", "legal", "medical", "local-authority", "cp", "criminal", "family", "financial",
           "safeguarding", "police")
 
-# Path fragments that mark walled material in a store_search chunk's source_path.
+# Path fragments that mark walled material in a store_search chunk's source_path. Fallback for
+# when the store's per-hit track/context metadata isn't present (older server); the metadata check
+# in _chunk_is_walled is authoritative once cider-store's track/context/doc_kind ride each hit.
 _WALLED_PATH = ("criminal_track", "/case/", "_case_", "narrative_register", "familycourt",
-                "legal_track", "/legal", "iuc_evidence", "cv_register", "cv_contempt")
+                "legal_track", "/legal", "iuc_evidence", "iuc_rebuttal", "evidence_pack",
+                "cv_register", "cv_contempt", "cora_analysis", "stark", "master_evidence",
+                "corroboration_register", "rebuttal", "familycourt_read")
 
 # One-line discipline to drop into an agent prompt that may call store_search.
 GUIDANCE = ("Default cider queries to context=personal|work; never surface case/legal/medical "

@@ -18,10 +18,24 @@ import sqlite3
 from pathlib import Path
 
 _DB = Path.home() / "cider-outputs" / ".store" / "knowledge.sqlite"
+# Preferred seam (cross-project alignment #5): cider-store emits claim/evidence/document atoms
+# here in the PA Activity shape, each claim carrying meta.people (person:<slug>) + status +
+# provenance. We read the cache first and fall back to a direct SQLite visitation only if it's
+# absent — decoupling the PA build from cider's schema.
+_CACHE = Path.home() / "cider-outputs" / ".store" / "activity_cache.json"
 
 
 def available() -> bool:
-    return _DB.exists()
+    return _CACHE.exists() or _DB.exists()
+
+
+def _cache_items() -> list[dict]:
+    try:
+        data = json.loads(_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list)
+                                                                  else [])
 
 
 def _connect() -> sqlite3.Connection:
@@ -29,14 +43,28 @@ def _connect() -> sqlite3.Connection:
 
 
 def person_claims(slug: str, limit: int = 24) -> list[dict]:
-    """Claims linked to person:<slug> in the graph — {id, label, status, edge, note}.
+    """Claims linked to person:<slug> — {id, label, status, edge, note}. Cache-first, SQLite fallback.
 
-    Read-only and defensive: any error (missing DB, schema drift) yields an empty list so a
-    build never fails on cider being absent or mid-migration.
+    Read-only and defensive: any error yields an empty list so a build never fails on cider being
+    absent or mid-migration.
     """
-    if not slug or not available():
+    if not slug:
         return []
     node = f"person:{slug}"
+    items = _cache_items()
+    if items:                                              # preferred seam — the emitted cache
+        out = []
+        for a in items:
+            if a.get("source") != "claim":
+                continue
+            m = a.get("meta") or {}
+            if node in (m.get("people") or []):
+                out.append({"id": m.get("id") or a.get("url") or "",
+                            "label": a.get("title") or "", "status": m.get("status") or "",
+                            "edge": m.get("edge") or "", "note": m.get("provenance") or ""})
+        return out[:limit]
+    if not _DB.exists():
+        return []
     try:
         con = _connect()
         rows = con.execute(

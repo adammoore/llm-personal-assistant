@@ -281,7 +281,13 @@ def from_granola(days: int = 21) -> list[Activity]:
 
 
 def from_cider() -> list[Activity]:
-    """Knowledge atoms from cider-store's activity_cache.json (if present) — read-only, defensive."""
+    """Non-walled knowledge atoms from cider-store's activity_cache.json — read-only, defensive.
+
+    cider-store's corpus is overwhelmingly case/legal; those atoms belong to the Nest's GATED
+    case layer (read via lib.cider), NOT the general timeline. So we drop walled atoms here — only
+    genuinely personal/work knowledge (if cider ever emits any) reaches the default stream.
+    """
+    from lib.wall import is_walled
     try:
         data = json.loads(_CIDER_CACHE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -290,6 +296,8 @@ def from_cider() -> list[Activity]:
     out: list[Activity] = []
     for a in items:
         if not isinstance(a, dict) or not a.get("title"):
+            continue
+        if is_walled((a.get("meta") or {}).get("context")):   # case/legal → gated layer, not here
             continue
         out.append(Activity(
             source=str(a.get("source") or "document"),
