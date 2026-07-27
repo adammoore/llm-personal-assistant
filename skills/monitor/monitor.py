@@ -18,6 +18,7 @@ First run seeds state silently (records what already exists without nudging).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -34,7 +35,9 @@ from lib.comms import (
     fetch_inbox,
     partition_inbox,
 )
+from lib.events import candidate_key, detect_candidates, on_calendar
 from lib.imessage import captures as imessage_captures
+from lib.imessage import recent as imessage_recent
 from lib.state import (
     already_nudged,
     load_state,
@@ -127,6 +130,63 @@ def watch_deadlines(state: dict, now: datetime) -> list[dict]:
             events.append({"key": f"deadline:{t['id']}", "text": f"⏰ {t['title']} — {when}"})
             notified.add(t["id"])
     state["deadline_notified"] = list(notified)
+    return events
+
+
+_PROPOSED_EVENTS = repo_root() / "data" / "proposed_events.json"
+
+
+def _short_sender(who: str | None) -> str:
+    who = (who or "").strip()
+    return who.split("@")[0] if "@" in who else (who or "a message")
+
+
+def _write_proposals(fresh: list[dict]) -> None:
+    """Merge fresh event proposals into the dashboard cache (recent, deduped, capped)."""
+    try:
+        existing = json.loads(_PROPOSED_EVENTS.read_text(encoding="utf-8")).get("items", [])
+    except (OSError, ValueError):
+        existing = []
+    have = {p.get("key") for p in existing}
+    for c in fresh:
+        k = candidate_key(c)
+        if k in have:
+            continue
+        existing.append({"key": k, "when": c["when"], "snippet": c["snippet"],
+                         "sender": _short_sender(c.get("sender")), "source": c.get("source"),
+                         "proposed_at": datetime.now().isoformat(timespec="seconds")})
+    try:
+        _PROPOSED_EVENTS.write_text(
+            json.dumps({"items": existing[-20:]}, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8")
+    except OSError:
+        pass
+
+
+def watch_events(state: dict, now: datetime) -> list[dict]:
+    """Incoming appointment reminders (iMessage/SMS) not on the calendar → PROPOSE (never write).
+
+    autonomy.yaml: propose_calendar is autonomous-flagged, so the nudge is a proposal only.
+    Writing the real event is confirm-required (Phase 3) — this watcher never touches the calendar.
+    """
+    seen = set(state.setdefault("proposed_events", []))
+    msgs = [{"text": m["text"], "date": m["date"], "sender": m["who"], "source": "imessage"}
+            for m in imessage_recent(days=2, limit=60) if not m.get("from_me")]
+    events, fresh = [], []
+    for c in detect_candidates(msgs, now):
+        k = candidate_key(c)
+        if k in seen or on_calendar(c["when"]):
+            continue
+        seen.add(k)
+        fresh.append(c)
+        events.append({
+            "key": f"event:{k}",
+            "text": (f"📅 Possible appointment ({_short_sender(c.get('sender'))}): "
+                     f"{c['snippet'][:70]} — {c['when']['display']}. "
+                     f"Not on your calendar — reply 'add' to put it in fairresconman.")})
+    state["proposed_events"] = list(seen)[-300:]
+    if fresh:
+        _write_proposals(fresh)
     return events
 
 
@@ -327,7 +387,7 @@ def cycle(state: dict, now: datetime, *, dry: bool) -> dict:
     """One monitor pass. Returns a small report for logging/tests."""
     present: dict[str, set] = {}   # {account_id: current inbox ids} — feeds retraction
     events = (watch_mail(state, present) + watch_calendar(state, now)
-              + watch_deadlines(state, now))
+              + watch_deadlines(state, now) + watch_events(state, now))
     # First run: seed silently so we don't nudge about everything that already exists
     # (and set the iMessage baseline so history isn't captured).
     if not state.get("seeded"):

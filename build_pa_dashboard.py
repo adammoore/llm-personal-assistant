@@ -722,6 +722,30 @@ def _people_card() -> str:
     return _card("people", "People", str(total), "".join(blocks), collapsed=True)
 
 
+def _proposed_events_card() -> str:
+    """Phase 2 — appointments the monitor detected in incoming messages, not yet on the calendar.
+
+    Read-only surface for `data/proposed_events.json`. Creating the real event is confirm-required
+    (Phase 3); for now Adam replies 'add' on Signal. Renders nothing when there are no proposals.
+    """
+    try:
+        items = json.loads((repo_root() / "data" / "proposed_events.json")
+                           .read_text(encoding="utf-8")).get("items", [])
+    except (OSError, ValueError):
+        return ""
+    if not items:
+        return ""
+    rows = "".join(
+        f'<li class="row"><span class="when">{_esc((e.get("when") or {}).get("display", ""))}</span>'
+        f'<span class="what">📅 {_esc((e.get("snippet") or "")[:58])} '
+        f'<span class="preason">{_esc(e.get("sender") or e.get("source") or "")}</span></span></li>'
+        for e in reversed(items[-6:]))
+    body = (f'<ul class="rows">{rows}</ul>'
+            '<p class="empty sm">Detected in your messages, not on your calendar — reply '
+            '<b>add</b> on Signal to create it in fairresconman.</p>')
+    return _card("proposed", "📅 Proposed appointments", str(len(items)), body)
+
+
 def _priorities_card(today: date) -> str:
     """The main view: everything Adam has explicitly pinned — tasks, people, messages — together.
 
@@ -895,7 +919,8 @@ def _render_html(today: date) -> str:
              f'<span class="n">{_esc(next_mtg)}</span><span class="l">next</span></button>')
 
     wins = f' · ✓ {len(done_tasks)} done' if done_tasks else ""
-    cards = (_priorities_card(today) + _today_card(today, events_by_acct)
+    cards = (_priorities_card(today) + _proposed_events_card()
+             + _today_card(today, events_by_acct)
              + _tasks_card(today, open_tasks)
              + _messages_card(worth_by_acct) + _inbox_card() + _work_card()
              + _reminders_card() + _people_card() + _activity_card())
