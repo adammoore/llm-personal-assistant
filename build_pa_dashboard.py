@@ -733,17 +733,31 @@ def _proposed_events_card() -> str:
                            .read_text(encoding="utf-8")).get("items", [])
     except (OSError, ValueError):
         return ""
-    if not items:
+    live = [e for e in items if (e.get("status") or "proposed") in ("proposed", "confirmed")]
+    if not live:
         return ""
-    rows = "".join(
-        f'<li class="row"><span class="when">{_esc((e.get("when") or {}).get("display", ""))}</span>'
-        f'<span class="what">📅 {_esc((e.get("snippet") or "")[:58])} '
-        f'<span class="preason">{_esc(e.get("sender") or e.get("source") or "")}</span></span></li>'
-        for e in reversed(items[-6:]))
+    rows = ""
+    for e in reversed(live[-8:]):
+        key, st = _esc(e.get("key", "")), (e.get("status") or "proposed")
+        w = e.get("when") or {}
+        if st == "confirmed":
+            action = '<span class="ev-q">queued ✓</span>'
+        else:
+            action = (
+                f'<form class="ev-add" method="post" action="/event-add">'
+                f'<input type="hidden" name="key" value="{key}">'
+                f'<button title="add to your fairres calendar">＋ add</button></form>'
+                f'<form class="ev-dismiss" method="post" action="/event-dismiss">'
+                f'<input type="hidden" name="key" value="{key}">'
+                f'<button title="dismiss — not a real appointment">✕</button></form>')
+        rows += (f'<li class="row prow"><span class="when">{_esc(w.get("display", ""))}</span>'
+                 f'<span class="what">📅 {_esc((e.get("snippet") or "")[:50])} '
+                 f'<span class="preason">{_esc(e.get("sender") or "")}</span></span>{action}</li>')
     body = (f'<ul class="rows">{rows}</ul>'
-            '<p class="empty sm">Detected in your messages, not on your calendar — reply '
-            '<b>add</b> on Signal to create it in fairresconman.</p>')
-    return _card("proposed", "📅 Proposed appointments", str(len(items)), body)
+            '<p class="empty sm">Detected in your messages, not on your calendar. '
+            '<b>＋ add</b> queues it for <b>fairresconman</b> (created at your next check-in / on '
+            'request).</p>')
+    return _card("proposed", "📅 Proposed appointments", str(len(live)), body)
 
 
 def _priorities_card(today: date) -> str:
@@ -1165,6 +1179,14 @@ details.grp:not([open])>summary.sub{ color:var(--muted); opacity:.85; }
   background:transparent; color:var(--muted); }
 .pprio.p-high button{ color:#B45309; border-color:#B45309; font-weight:700; }
 .pprio.p-low button{ opacity:.6; }
+/* Proposed-appointment add/dismiss */
+.ev-add,.ev-dismiss{ display:inline-flex; margin-left:.3rem; flex:0 0 auto; }
+.ev-add button{ font:.62rem/1 var(--mono); padding:.14rem .45rem; border-radius:1rem; cursor:pointer;
+  border:1px solid var(--accent,#2b7a6f); color:var(--accent,#2b7a6f); background:transparent;
+  font-weight:650; }
+.ev-dismiss button{ font:.62rem/1 var(--mono); padding:.14rem .4rem; border-radius:1rem;
+  cursor:pointer; border:1px solid var(--line); color:var(--muted); background:transparent; }
+.ev-q{ margin-left:.3rem; font:.62rem/1 var(--mono); color:var(--accent,#2b7a6f); }
 /* The Nest — bounded, nested containers wired by connections (Nelson / Tinderbox) */
 body.fieldmode .grid, body.fieldmode .brief, body.fieldmode .tstrip,
 body.fieldmode .deck, body.fieldmode .ctl, body.fieldmode .capture,
@@ -1432,6 +1454,24 @@ _SCRIPT = """
         var nxt=order[(order.indexOf(cur)+1)%3];
         f.classList.remove('p-low','p-normal','p-high'); f.classList.add('p-'+nxt);
         var b=f.querySelector('button'); if(b) b.textContent=nxt;
+      });
+    });
+  });
+  // Proposed appointment: dismiss removes the row; add marks it queued — both in place.
+  document.querySelectorAll('form.ev-dismiss').forEach(function(f){
+    f.addEventListener('submit', function(e){ e.preventDefault();
+      var li=f.closest('.row');
+      if(li){ li.style.transition='opacity .2s'; li.style.opacity='0'; }
+      ajaxPost(f).then(function(){ if(li) setTimeout(function(){ li.remove(); }, 190); });
+    });
+  });
+  document.querySelectorAll('form.ev-add').forEach(function(f){
+    f.addEventListener('submit', function(e){ e.preventDefault();
+      var li=f.closest('.row');
+      ajaxPost(f).then(function(){
+        if(li){ li.querySelectorAll('form.ev-add,form.ev-dismiss').forEach(function(x){x.remove();});
+          var q=document.createElement('span'); q.className='ev-q'; q.textContent='queued ✓';
+          li.appendChild(q); }
       });
     });
   });

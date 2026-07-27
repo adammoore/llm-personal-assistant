@@ -23,6 +23,7 @@ REPO = Path(__file__).resolve().parent
 DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
 sys.path.insert(0, str(REPO))
 
+from lib.calevent import set_status as event_set_status
 from lib.magictodo import breakdown
 from lib.mailsummary import summarize as summarize_inbox
 from lib.people import (
@@ -130,6 +131,14 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/person-priority":
                 # Cycle a person's priority (low→normal→high→low), then rebuild.
                 if cycle_priority(first("id")) is not None:
+                    _rebuild()
+            elif path == "/event-add":
+                # Adam confirms a proposed appointment → queue it for the agent to create
+                # (modify_calendar is confirm-required; this IS the confirmation, not the write).
+                if event_set_status(first("key"), "confirmed"):
+                    _rebuild()
+            elif path == "/event-dismiss":
+                if event_set_status(first("key"), "dismissed"):
                     _rebuild()
             elif path == "/person-edit":
                 # Human correcting machine-guessed metadata on a person.

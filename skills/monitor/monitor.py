@@ -163,17 +163,37 @@ def _write_proposals(fresh: list[dict]) -> None:
         pass
 
 
+def _incoming_messages() -> list[dict]:
+    """Unified incoming stream for event detection — pluggable sources.
+
+    Today: iMessage/SMS (fullest text) + mail (subject; the inbox cache carries no body). WhatsApp
+    and Signal join here the moment a cache feed exists for them (the granola pattern — daemons
+    read caches, they don't call live CLIs per cycle). `detect_candidates` takes any such list.
+    """
+    msgs: list[dict] = []
+    msgs += [{"text": m["text"], "date": m["date"], "sender": m["who"], "source": "imessage"}
+             for m in imessage_recent(days=2, limit=60) if not m.get("from_me")]
+    try:
+        inbox = json.loads((repo_root() / "data" / "inbox_cache.json").read_text(encoding="utf-8"))
+        for it in inbox.get("items", []):
+            if it.get("channel") == "mail" and it.get("subject"):
+                msgs.append({"text": it["subject"], "date": it.get("date"),
+                             "sender": it.get("who"), "source": "mail"})
+    except (OSError, ValueError):
+        pass
+    # Future sources (add when cached): WhatsApp (wacli daily-sync cache), Signal (OpenClaw).
+    return msgs
+
+
 def watch_events(state: dict, now: datetime) -> list[dict]:
-    """Incoming appointment reminders (iMessage/SMS) not on the calendar → PROPOSE (never write).
+    """Appointment reminders in incoming messages, not on the calendar → PROPOSE (never write).
 
     autonomy.yaml: propose_calendar is autonomous-flagged, so the nudge is a proposal only.
     Writing the real event is confirm-required (Phase 3) — this watcher never touches the calendar.
     """
     seen = set(state.setdefault("proposed_events", []))
-    msgs = [{"text": m["text"], "date": m["date"], "sender": m["who"], "source": "imessage"}
-            for m in imessage_recent(days=2, limit=60) if not m.get("from_me")]
     events, fresh = [], []
-    for c in detect_candidates(msgs, now):
+    for c in detect_candidates(_incoming_messages(), now):
         k = candidate_key(c)
         if k in seen or on_calendar(c["when"]):
             continue
