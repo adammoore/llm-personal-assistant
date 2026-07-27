@@ -97,3 +97,57 @@ projects share: **visitation not copying** — reference in place, preserve prov
 - The **`Activity` node schema** (`lib/activity.py`) — the shared unified-node shape.
 - A **Nest UI** ready to render your `graph_neighbours` edges as traced connections across
   bounded, nested containers (Nelson / Tinderbox style).
+
+---
+
+# Round 2 — 2026-07-27 (after the graph enrichment + tailnet rebuild)
+
+Three consolidated asks. #1 and #2 unblock the Nest rendering the richer graph; #3 is a
+one-line collision fix for the always-on HTTP rebuild.
+
+## 1. Emit COMPACT cluster atoms into `activity_cache.json`
+
+The Nest renders **each cache atom as ONE node**. A cluster like
+`claim:wa_cora_deletion_recovery` has ~250 edges (236 OCR'd recovery screenshots + a
+517-message recovered record + media + deletion-analysis docs) — emitting those raw would flood
+the view with 236 nodes (the exact overwhelm we just designed away). Emit each high-value cluster
+as a **single summary atom** carrying counts, not its members:
+
+```json
+{ "source": "cluster", "type": "evidence-cluster",
+  "title": "Deleted-message recovery — Cora WhatsApp",
+  "timestamp": null, "theme": null, "priority": null, "url": "claim:wa_cora_deletion_recovery",
+  "meta": {
+    "id": "claim:wa_cora_deletion_recovery",
+    "people": ["person:cora"],
+    "context": "case", "track": "family",
+    "status": "SUPPORTED",
+    "provenance": "document:50205",
+    "counts": { "recovery_screenshots": 236, "recovered_messages": 517,
+                "chat_media": 1022, "deletion_docs": 3 },
+    "members": ["document:51230", "…top 3-5 exemplars only"]
+  } }
+```
+
+Do the same for other high-value clusters (contradiction chains, `transmits` email→attachment
+groups). `members` = a handful of exemplars; the `counts` carry the scale. Keep the existing
+person-wired claim atoms (`AH-*`) exactly as they are — those render perfectly.
+
+## 2. Fix `context` tagging (work vs case)
+
+Right now **every** `store_search` hit returns `context: "case"` — including Enact work docs from
+the Gmail Takeout — with `track: null`. So the PA can't separate work from case: its wall filter
+either over-gates (drops legitimate work recall) or under-gates. Please set
+`context ∈ personal | work | case` **per document** (or populate `track` and reserve
+`context:"case"` for genuine case material). The PA's `lib.wall.filter_results` already keys on
+`track`/`context` — once these are accurate, the metadata gate becomes authoritative and the
+path-heuristic fallback retires.
+
+## 3. ⚠ Port: the always-on HTTP rebuild must NOT bind 8787
+
+`STORE_MULTI_SURFACE_SETUP.md` §1–2 uses `CIDER_PORT=8787` as its example. **The PA dashboard
+already owns `127.0.0.1:8787`** (`serve_dashboard.py`, launchd `com.adamvialsmoore.pa-dashboard`).
+Pick any other free high port for the cider HTTP service (e.g. 8788 / 8010 / 9797) — otherwise one
+of the two services fails to start. Everything else in that guide is PA-neutral: keep emitting
+`activity_cache.json` to `~/cider-outputs/.store/` and the PA reads it there regardless of
+transport (its build path never touches MCP).
