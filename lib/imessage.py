@@ -33,8 +33,11 @@ def available() -> bool:
 
 
 def _connect() -> sqlite3.Connection:
-    # immutable=1 avoids taking a lock on the live Messages DB.
-    return sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True, timeout=5)
+    # mode=ro is read-only (no write lock on the live Messages DB) AND still reads the -wal, so we
+    # see messages that haven't been checkpointed into chat.db yet. `immutable=1` must NOT be used:
+    # it tells SQLite the file never changes, so the WAL is ignored and recent messages (SMS/iMessage
+    # from the last few days) go invisible — which silently blinded capture, inbox, and events.
+    return sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=5)
 
 
 def _apple_to_iso(raw: int) -> str:
