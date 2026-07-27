@@ -35,8 +35,11 @@ After the focused view, you can pull **provenance-backed knowledge** for the the
 cider-store (the sibling knowledge/document/graph engine) via its MCP tools — turning focus from
 "my tasks/dates/messages" into "…and what I actually know about this."
 
-1. `mcp__adam-mcp__store_search(query="<theme> <what Adam's focusing on>", top_k=6)` — hybrid
-   semantic+keyword over the corpus; each chunk carries its `source_path` (provenance).
+1. **`store_search`** `(query="<theme> <what Adam's focusing on>", top_k=6)` — hybrid
+   semantic+keyword over the corpus; each chunk carries its `source_path`/`track`/`context`
+   (provenance). Discover it via **ToolSearch by keyword** — the cider store connector prefix
+   varies by transport (`mcp__adam-mcp__*` stdio, `mcp__adam-local__*` / bare over the tailnet
+   HTTP service); never hardcode a prefix.
 2. **Honour the wall** — pass results through `lib.wall.filter_results(results, allow_case=…)`:
    ```python
    from lib.wall import filter_results, wants_case
@@ -45,8 +48,9 @@ cider-store (the sibling knowledge/document/graph engine) via its MCP tools — 
    A **case/legal/medical** focus is a deliberate ask → `allow_case=True` (the gated reveal). Any
    other theme → walled chunks are dropped, so case content never leaks into a work/personal focus.
 3. Surface the top 3–4 as **"related evidence"** — a one-line gist + its source document. For a
-   case focus you may also `mcp__adam-mcp__graph_neighbours("person:<slug>")` /
-   `graph_path(...)` to show claim/contradiction chains with provenance.
+   case focus you may also call `graph_neighbours("person:<slug>")` /
+   `graph_path(...)` (same store, discover by keyword) to show claim/contradiction chains with
+   provenance.
 
 **Read-only, always.** Reference in place with provenance; never draft legal content, never apply
 legal-team-only analytical labels, never write into CIDER. This is recall for Adam's own eyes.
