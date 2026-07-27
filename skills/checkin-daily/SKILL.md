@@ -40,21 +40,34 @@ nothing.
    marketing that slipped the filter. Keep the two accounts in **separate labelled sections**;
    never blend them. One or two lines per section — a glance, not a firehose.
 
-3. **Invite intentions.** Ask once, gently, for up to three things Adam wants to point at
+3. **Appointments captured from messages** (skip silently if the queue is empty). Read it:
+   ```bash
+   python3 -c "import json,sys; sys.path.insert(0,'.'); from lib.calevent import pending, event_fields; \
+     print(json.dumps({'confirmed':[{**event_fields(p),'key':p['key']} for p in pending('confirmed')], \
+                       'proposed':[{'key':p['key'],'when':p.get('when'),'snippet':p.get('snippet'),'sender':p.get('sender')} for p in pending('proposed')]}, indent=1))"
+   ```
+   - **Create the confirmed ones** (Adam already clicked ＋add on the dashboard = his
+     confirmation). For each, follow the **calendar-capture** skill: sanity-check the parsed
+     date against the raw message, create it in **fairresconman** via the Calendar connector,
+     then `set_status('<key>','added')`. One line each ("Added *Dental check-up* — Mon 10 Aug 9am").
+   - **Surface the un-decided ones** (`proposed`) briefly — appointments detected in messages he
+     hasn't acted on — and offer to add (which confirms + creates) or dismiss. Don't push.
+
+4. **Invite intentions.** Ask once, gently, for up to three things Adam wants to point at
    today. Offer a daily prompt from `extracted/prompt_bank.json` (a `daily` one) if it helps.
    If getting started feels like the sticky part, you may instead offer a single
    `activation` prompt from `extracted/reflection_prompts.json`. **One question either way,
    skippable, zero consequence.** Do not push if he skips.
 
-4. **Record what he gives** (only what he gives):
+5. **Record what he gives** (only what he gives):
    - Write the intentions into the `## Top 3 intentions` section of `data/daily/<date>.md`.
    - If an intention is clearly a task he wants tracked, offer to capture it via
      `task-capture` (`--source checkin`). Don't force it onto the task list.
 
-5. **Refresh the surface** (optional): `python3 build_pa_dashboard.py` so anything captured
+6. **Refresh the surface** (optional): `python3 build_pa_dashboard.py` so anything captured
    shows on `PA_DASHBOARD.html`.
 
-6. **Close briefly.** Acknowledge the start, name any small win, stop. Never itemise
+7. **Close briefly.** Acknowledge the start, name any small win, stop. Never itemise
    undone things as debt.
 
 ## Notes
