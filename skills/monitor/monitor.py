@@ -338,6 +338,25 @@ def react(state: dict, events: list[dict], now: datetime, *, dry: bool) -> list[
     return sent
 
 
+def _prune_old_sessions(days: int = 7) -> None:
+    """Bound the Claude Code session logs this project's headless `claude -p` calls leave behind.
+
+    Every brief / magictodo / mailsummary spawn writes a session jsonl under
+    ~/.claude/projects/<this-project>/; unpruned they accumulated ~85/day (949 in a week). Delete
+    this project's logs older than `days` — the active session and recent history are untouched —
+    so the footprint stays bounded on a tight disk. Scoped to THIS project only; best-effort.
+    """
+    import glob
+    proj = Path.home() / ".claude" / "projects" / "-Users-adamvialsmoore-llm-personal-assistant"
+    cutoff = time.time() - days * 86400
+    for f in glob.glob(str(proj / "*.jsonl")):
+        try:
+            if os.path.getmtime(f) < cutoff:
+                os.remove(f)
+        except OSError:
+            pass
+
+
 def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
     """Re-render dashboard + PA Today at most every SURFACE_REFRESH_MIN. Returns True if done."""
     last = state.get("last_surface_refresh")
@@ -366,13 +385,14 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
         brief_due = True
         if blast:
             try:
-                brief_due = now - datetime.fromisoformat(blast) >= timedelta(minutes=30)
+                brief_due = now - datetime.fromisoformat(blast) >= timedelta(minutes=90)
             except ValueError:
                 brief_due = True
         if brief_due:
             subprocess.run(["python3", str(root / "lib/brief.py")],
                            check=False, capture_output=True, timeout=120)
             state["last_brief_refresh"] = now.isoformat(timespec="seconds")
+            _prune_old_sessions()          # bound the headless claude -p session-log footprint
         subprocess.run(["python3", str(root / "build_pa_dashboard.py")],
                        check=False, capture_output=True, timeout=60)
         subprocess.run(["python3", str(root / "skills/checkin-daily/push_today.py")],
