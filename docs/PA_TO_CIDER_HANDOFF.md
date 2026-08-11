@@ -151,3 +151,46 @@ Pick any other free high port for the cider HTTP service (e.g. 8788 / 8010 / 979
 of the two services fails to start. Everything else in that guide is PA-neutral: keep emitting
 `activity_cache.json` to `~/cider-outputs/.store/` and the PA reads it there regardless of
 transport (its build path never touches MCP).
+
+---
+
+# Round 3 — 2026-08-11 (disk pressure + duplicated critical source)
+
+Flagging a disk problem that is now actively corrupting state on the shared Mac, plus a specific
+duplication concern in `cider-outputs/email`. This is cider-store's data to decide on — the PA
+only reads the emitted caches — but the impact lands on the whole machine.
+
+## The problem
+The disk (228 GB) sits at **~6.9 GB free**. `~/cider-outputs` is **20 GB** of that, and the disk is
+so tight that normal fluctuation tips it into **disk-full**, which has silently corrupted state —
+it froze the PA's iMessage WAL watermark (blinding capture/inbox for days) and blocked app saves.
+This will keep recurring until cider-outputs has real headroom.
+
+## The specific concern: `cider-outputs/email` (11 GB) duplicates a never-delete source
+- `~/Downloads/All mail Including Spam and Trash-002.mbox` = **26 GB** is the **canonical Gmail
+  export, flagged never-delete** — the single source of truth for the email evidence.
+- `cider-outputs/email/takeout` = **5.6 GB** is **36,277 `.eml` files extracted from that mbox** —
+  i.e. a second copy of content that already exists, preserved, in `~/Downloads`.
+- This is **duplication of a critical evidence source** (provenance/sync-drift risk for a legal
+  corpus — two divergent copies of the same mail) **and** ~5.6 GB of pure disk drag. It also cuts
+  against the shared **"visitation, not copying"** doctrine
+  (`07_CROSS_PROJECT_ALIGNMENT.md §2`): reference the source in place, don't copy it out.
+
+## Asks (cider-store's call — verify before deleting anything)
+1. **Reclaim the duplicate.** Once you've confirmed `email/takeout` is fully ingested into `.store`
+   (chunks + vectors), **delete `cider-outputs/email/takeout` (5.6 GB)** — it's re-extractable from
+   the never-delete mbox on demand. Before deleting, ensure `.store` chunk **provenance points back
+   to the mbox** (message-id / byte offset), not to the soon-deleted `.eml` paths, so evidence
+   trails still resolve. → ~5.6 GB back.
+2. **Ingest by visitation.** Going forward, extract-on-demand from `~/Downloads/…mbox` (or stream
+   it) rather than persisting a standing `.eml` copy. Single source of truth = the never-delete mbox.
+3. **Review the rest for archive-after-ingest:** `email/live` (3.9 GB), `email/bodies` (822 MB),
+   `ocr` (2.8 GB). Once in `.store`, the raw intermediates can likely move to external/cloud. Email
+   + OCR alone ≈ 8–11 GB recoverable — roughly doubles free space.
+4. **Low-disk guard.** Add an alert (e.g. launchd at <5 GB free) so disk-full surfaces loudly
+   instead of silently corrupting state (WAL watermarks, app saves) again.
+
+## What the PA already did (its own small share)
+The PA's headless `claude -p` sessions were leaving ~85 Claude Code session logs/day
+(`~/.claude/projects/<proj>/`, 949 in a week, ~76 MB). Fixed 2026-08-11: pruned; brief throttle
+30→90 min; `monitor._prune_old_sessions()` keeps >7-day logs cleared. Minor vs the 20 GB, but done.
