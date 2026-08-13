@@ -88,6 +88,29 @@ def _completed_pa_reminders() -> list[dict]:
         return []
 
 
+def _open_pa_reminder_ids() -> dict:
+    """{task_id: reminder_id} for OPEN reminders already in 'PA Tasks', keyed by their pa-task url.
+
+    The source of truth for "does a reminder for this task already exist" — used to reconcile when
+    the local map lost an id (a create that succeeded but returned no parseable id, or a timeout
+    after the reminder was made). Keying by the url the module itself stamps makes push idempotent,
+    so a re-run adopts the existing reminder instead of adding a duplicate. Defensive: [] on error.
+    """
+    try:
+        out = subprocess.run(["remindctl", "show", "open", "-l", LIST, "--json", "--no-input"],
+                             capture_output=True, text=True, timeout=20)
+        data = json.loads(out.stdout or "[]")
+        items = data if isinstance(data, list) else data.get("reminders", [])
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return {}
+    out_map: dict = {}
+    for r in items:
+        url = r.get("url") or ""
+        if "pa-task:" in url and r.get("id"):
+            out_map[url.split("pa-task:", 1)[1]] = r["id"]
+    return out_map
+
+
 def sync() -> dict:
     """Reconcile the PA's open tasks into the 'PA Tasks' Reminders list. Returns a small report."""
     if not available():
@@ -112,12 +135,21 @@ def sync() -> dict:
                     pass
             del pushed[tid]
 
-    # PUSH: open tasks not yet on the list → add.
+    # PUSH: open tasks not yet on the list → add. Reconcile against the reminders that ACTUALLY
+    # exist (keyed by pa-task url), so a task whose id the local map lost isn't added a second time.
+    existing_by_url = _open_pa_reminder_ids()
     for t in tasks:
         tid = str(t["id"])
         if t.get("completed") or tid in pushed:
             continue
+        if tid in existing_by_url:                         # already on the list — adopt, don't dup
+            pushed[tid] = existing_by_url[tid]
+            continue
         rid = _add(t)
+        if not rid:
+            # _add may have created the reminder but failed to report an id (blank JSON / timeout
+            # after create). Re-query by url to recover it rather than re-adding next run.
+            rid = _open_pa_reminder_ids().get(tid)
         if rid:
             pushed[tid] = rid
             added.append(t.get("title") or tid)

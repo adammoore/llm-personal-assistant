@@ -332,13 +332,19 @@ def _activity_card() -> str:
     stream = unified(days=14)
     if not stream:
         return ""
+    shown = stream[:16]
     rows = "".join(
         f'<li class="row" data-theme="{_esc((a.theme or "").lower())}" '
         f'data-context="{_ctx(a.theme, None)}">'
         f'<span class="when">{_esc((a.timestamp or "")[:16])}</span>'
         f'<span class="what">{_ACTIVITY_GLYPH.get(a.source, "·")} {_esc(a.title[:56])}</span></li>'
-        for a in stream[:16])
-    return _card("activity", "Recent activity", "", f'<ul class="rows">{rows}</ul>',
+        for a in shown)
+    # Don't let the top-16 read as the whole stream — show the true total, and a "+N more" footer
+    # when the list is clipped, so a bounded card is never mistaken for a complete one.
+    more = len(stream) - len(shown)
+    if more > 0:
+        rows += f'<li class="row more">+{more} more (of {len(stream)})</li>'
+    return _card("activity", "Recent activity", str(len(stream)), f'<ul class="rows">{rows}</ul>',
                  collapsed=True)
 
 
@@ -394,7 +400,14 @@ def _people_ref_index() -> list[tuple[str, str]]:
 def _field_view(today: date) -> str:
     refidx = _people_ref_index()
     nodes = []
-    for a in unified(days=21)[:80]:
+    _ACT_CAP, _PPL_CAP = 80, 40
+    all_acts = unified(days=21)
+    all_ppl = ranked_people(set(_PINS.get("person", [])))
+    # The Nest caps nodes so the plane stays legible — but a silently-clipped map reads as the whole
+    # picture (an item wired only to a dropped node looks unconnected). Track what the caps hid and
+    # surface it in the header, so the container counts never imply completeness.
+    hidden = max(0, len(all_acts) - _ACT_CAP) + max(0, len(all_ppl) - _PPL_CAP)
+    for a in all_acts[:_ACT_CAP]:
         low = a.title.lower()
         refs = {nm for tok, nm in refidx if tok in low}
         theme = (a.theme or "").lower()
@@ -404,7 +417,7 @@ def _field_view(today: date) -> str:
             or _nest_domain(a.title, theme, base, refs)
         nodes.append({"title": a.title, "kind": a.source, "theme": theme, "refs": refs,
                       "ctx": ctx})
-    for p in ranked_people(set(_PINS.get("person", [])))[:40]:
+    for p in all_ppl[:_PPL_CAP]:
         refs = {p["name"]}
         nodes.append({"title": p["name"], "kind": "person", "theme": "", "refs": refs,
                       "slug": p.get("slug"),
@@ -475,11 +488,13 @@ def _field_view(today: date) -> str:
             f'<div class="ctr-h ctr-top">{_esc(c)}</div>'
             f'<div class="ctr-body">{"".join(sub_html)}</div></div>')
 
+    hidden_note = (f'<span class="field-hint">+{hidden} not shown (node cap)</span>'
+                   if hidden else "")
     return (
         '<div id="field" class="field nest" hidden>'
         '<div class="field-ctl">connected containers · <b>click an item to trace its links</b>'
         '<span class="field-hint">bounded &amp; nested, wired across contexts — Nelson / '
-        'Tinderbox</span></div>'
+        f'Tinderbox</span>{hidden_note}</div>'
         f'<div class="nest-plane"><svg class="nest-links"></svg>{"".join(outer)}</div></div>')
 
 

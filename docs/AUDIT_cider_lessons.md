@@ -8,9 +8,9 @@
 collapses "Adam <other-surname>" to the principal) · 9, 10 (`kind_src`/`circle_src` provenance —
 guesses flagged + re-derivable, human edits protected) · 11, 12 (people-discovery keys by
 identity, flags namesakes instead of silently collapsing distinct same-named people).
-**Open:** 13–17 (the low-severity cluster): undated granola meetings dropped, two dashboard
-"reads as complete" truncations, `from_calendar` ignoring its `days` window, `remindpush`
-duplicate-on-ambiguous-create.
+13, 14, 15, 16, 17 (`from_granola` keeps undated meetings; activity card "+N more" + true count;
+Nest "+N not shown"; `from_calendar` honours its `days` window; `remindpush` idempotent by
+pa-task url). **All 17 findings fixed.** Verified end-to-end by `tests/eval_scenarios.py`.
 
 ## Executive summary
 

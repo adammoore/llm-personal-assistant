@@ -116,12 +116,23 @@ def from_tasks() -> list[Activity]:
 
 
 def from_calendar(days: int = 14) -> list[Activity]:
-    """Upcoming events across both calendars, as activities — from the glance cache (no network)."""
+    """Upcoming events across both calendars, as activities — from the glance cache (no network).
+
+    Honours `days`: only events within [today, today+days] are returned, so unified(days=7) really
+    is a 7-day window and not "whatever span the cache happens to hold" (which drifted wider).
+    """
+    from datetime import date, timedelta
+    try:
+        horizon = (date.today() + timedelta(days=days)).isoformat()
+    except (ValueError, OSError):
+        horizon = ""
     events_by_acct = glance_load().get("events", {})
     activities: list[Activity] = []
     for acct in ACCOUNTS:
         for ev in events_by_acct.get(acct.get("id", ""), []):
             day = ev.get("date") or ""
+            if horizon and day and day > horizon:          # beyond the requested window — skip
+                continue
             when = ev.get("when") or ""
             # Compose an ISO-ish anchor: "YYYY-MM-DD HH:MM" when timed, else the date.
             timestamp = f"{day} {when}".strip() if when and when != "all day" else day
@@ -286,7 +297,9 @@ def from_granola(days: int = 21) -> list[Activity]:
             cutoff = (date.today() - timedelta(days=days)).isoformat()
         except (ValueError, OSError):
             cutoff = ""
-    return [a for a in out if not cutoff or (a.timestamp or "")[:10] >= cutoff]
+    # Keep undated meetings (mirror from_cider) — a missing timestamp must not drop a real meeting
+    # out of the stream entirely; _sort_key already floats undated items to the bottom.
+    return [a for a in out if not cutoff or not a.timestamp or a.timestamp[:10] >= cutoff]
 
 
 def from_cider() -> list[Activity]:
