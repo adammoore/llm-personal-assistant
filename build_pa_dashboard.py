@@ -1273,6 +1273,29 @@ ol.steps li{ padding:.08rem 0; }
 footer{ color:var(--muted); font:.7rem/1 var(--mono); text-align:center; margin-top:1.5rem; }
 /* No motion by default beyond a tiny chevron turn; honour reduced-motion fully. */
 @media (prefers-reduced-motion:reduce){ *{ transition:none !important; animation:none !important; } }
+/* ── Mobile / narrow: the tailnet phone surface (…ts.net:8443 on the phone) ── */
+@media (max-width:640px){
+  html,body{ max-width:100%; overflow-x:hidden; }         /* never scroll the page sideways */
+  body{ padding:.7rem .6rem 2.4rem; font-size:1.02rem; }
+  .grid{ columns:1; column-gap:0; }                        /* single column of cards */
+  .card{ break-inside:avoid; }
+  .prefs{ flex-wrap:wrap; }
+  .prefs button,.facets button,.sum-btn button,.ghost{ min-height:40px; padding:.5rem .7rem; }
+  .facets{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  .deck{ gap:.4rem; } .deck>*{ flex:1 1 44%; }             /* stat tiles two-up */
+  .capture,.capture form{ flex-direction:column; align-items:stretch; }
+  .capture input,.capture select,.capture button{ width:100%; min-height:42px; box-sizing:border-box; }
+  /* fat-finger tap targets on the row controls */
+  .task form.done button,.task form.del button,.edit-btn,.pin button,.ev-add button,
+  .ev-dismiss button,.pprio button,.pkind button{ min-height:38px; }
+  .edit-btn,.pin button{ min-width:38px; }
+  .fitem{ padding:.4rem .55rem; }
+  /* Nest: stack containers, cap the plane, scroll it (not the page) */
+  .nest-plane{ flex-direction:column; }
+  .ctr,.ctr.sub{ flex:1 1 100%; min-width:0; }
+  .field-plane{ height:68vh; overflow:auto; }
+  table,pre,.field-plane{ overflow-x:auto; max-width:100%; }
+}
 .prefs{ display:flex; gap:.3rem; align-items:center; margin-left:auto; }
 .prefs button{ cursor:pointer; font:.72rem/1 var(--mono); padding:.25rem .5rem; border-radius:8px;
   border:1px solid var(--line); background:transparent; color:var(--muted); }
