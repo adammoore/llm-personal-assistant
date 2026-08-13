@@ -18,11 +18,13 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))   # so `python3 lib/reminders.py` can import lib.* (the task filter)
 CACHE_PATH = REPO / "data" / "reminders_cache.json"
 STORE_DIR = (Path.home() / "Library" / "Group Containers"
              / "group.com.apple.reminders" / "Container_v1" / "Stores")
@@ -37,6 +39,9 @@ SELECT r.ZTITLE,
 FROM ZREMCDREMINDER r
 LEFT JOIN ZREMCDOBJECT l ON r.ZLIST = l.Z_PK
 WHERE r.ZCOMPLETED = 0 AND r.ZTITLE IS NOT NULL AND TRIM(r.ZTITLE) <> ''
+  -- Exclude the PA's OWN pushed tasks (lib.remindpush) so reading Reminders doesn't re-ingest
+  -- them as duplicate tasks — the read/write loop cider's handover §4.1 warns about.
+  AND COALESCE(l.ZNAME1, l.ZNAME, l.ZTITLE, '') <> 'PA Tasks'
 """
 
 
@@ -101,7 +106,18 @@ def write_cache(path: Path = CACHE_PATH) -> dict:
                 "note": "Reminders store not found / unreadable (needs Full Disk Access).",
                 "items": []}
     else:
-        data = {"at": now, "ok": True, "items": open_reminders()}
+        items = open_reminders()
+        # Drop reminders that duplicate an open PA task — including lib.remindpush's own 'PA Tasks'
+        # pushes (the Core Data list-name join is unreliable, so match on title). Without this,
+        # reading Reminders re-ingests the tasks the PA just wrote there (cider handover §4.1 loop).
+        try:
+            from lib.taskstore import load_tasks
+            task_titles = {(t.get("title") or "").strip().lower()
+                           for t in load_tasks() if not t.get("completed")}
+            items = [r for r in items if (r.get("title") or "").strip().lower() not in task_titles]
+        except (ImportError, OSError, ValueError):
+            pass
+        data = {"at": now, "ok": True, "items": items}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return data
