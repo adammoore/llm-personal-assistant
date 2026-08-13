@@ -53,12 +53,23 @@ cider-store (the sibling knowledge/document/graph engine) via its MCP tools — 
    provenance.
 
 **Contemporaneity (avoid citing our own notes back to us).** The store also indexes the PA's *own*
-write-ups (briefs, notes, summaries), and they read as MORE fluent than the source — so on a
-"what happened / what was said" question they win on relevance and the answer becomes the summary
-of its own finding. When you're after **what actually happened**, pass `store_search`'s
-`authored_before`/`authored_after` to keep evidence contemporaneous with the event, and prefer the
-primary document over any analysis of it. State which you're showing ("from the 13 Mar email" vs
-"from my note about it").
+write-ups (briefs, notes, the generated register/dashboard), and they read as MORE fluent than the
+source — so on a "what happened / what was said" question they win on relevance and the answer
+becomes the summary of its own finding. This is now **enforced in code**, not left to discipline —
+when you're after **what actually happened**, pass the hits through `lib.wall.contemporaneous`:
+```python
+from lib.wall import filter_results, wants_case, contemporaneous
+hits = filter_results(store_search_results, allow_case=wants_case("<theme>"))
+# event_date = the date the question is about; +1 day keeps same-day primary records
+hits, excluded = contemporaneous(hits, before="<event_date + 1 day>")   # drops PA-authored notes
+```
+`contemporaneous` drops the PA's own notes (so a summary can't be cited back as a source) and any
+hit authored on/after `before` (written with hindsight, not contemporaneous). **Surface what it
+excluded** — `excluded` is `{own_notes, post_event}`; if either is >0, say so ("2 of my own notes
+set aside") so the recall never reads as the whole record. Prefer the primary document over any
+analysis of it, and state which you're showing ("from the 13 Mar email" vs "from my note about it").
+For a "what do I know about this theme" question (not a dated "what happened"), you can pass
+`drop_own_notes=False` — the PA's synthesis is legitimately wanted there.
 
 **Read-only, always.** Reference in place with provenance; never draft legal content, never apply
 legal-team-only analytical labels, never write into CIDER. This is recall for Adam's own eyes.

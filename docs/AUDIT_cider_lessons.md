@@ -3,9 +3,11 @@
 ## Status (updated 13 Aug 2026)
 
 **Fixed:** 1, 2, 3 (`calevent` locked+atomic queue; `from_granola` wall guard) · 4, 5, 8
-(`brief` medical/LA mail + "+N more"; `onedrive` bounded walk; `calevent` per-field provenance).
-**Open:** 6, 7, 9–17. Next per the fix order below: 6 (focus contemporaneity enforced in code),
-7 (`person_slug` "adam" short-circuit).
+(`brief` medical/LA mail + "+N more"; `onedrive` bounded walk; `calevent` per-field provenance) ·
+6, 7 (`wall.contemporaneous` enforces the self-citation guard in code; `person_slug` no longer
+collapses "Adam <other-surname>" to the principal).
+**Open:** 9–17. Next per the fix order below: 9 & 10 (`circle_src`/`kind_src` provenance in the
+people layer), then 11 & 12 (key people-discovery by email, report collisions).
 
 ## Executive summary
 

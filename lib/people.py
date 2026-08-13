@@ -101,7 +101,10 @@ def person_slug(name: str) -> str:
     if not toks:
         return ""
     low = (name or "").lower()
-    if toks[0] in _PRINCIPAL_SLUG and (toks[0] == "adam" or "vials" in low or "moore" in low):
+    # A multi-token principal name needs surname evidence, ADAM INCLUDED — otherwise "Adam Jones"
+    # would collapse to person:adam and inherit the case principal's legal claim graph (all four are
+    # Vials Moore). A lone first name ("Adam") still maps to the slug via the single-token fallback.
+    if toks[0] in _PRINCIPAL_SLUG and ("vials" in low or "moore" in low):
         return _PRINCIPAL_SLUG[toks[0]]
     return "-".join([toks[0]] + ([toks[-1]] if len(toks) > 1 else []))
 

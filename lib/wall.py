@@ -38,6 +38,19 @@ _WALLED_PATH = ("criminal_track", "/case/", "_case_", "narrative_register", "fam
 GUIDANCE = ("Default cider queries to context=personal|work; never surface case/legal/medical "
             "content unless Adam explicitly asks for that theme. Use lib.wall.filter_results().")
 
+# Fragments in a chunk's source_path that mark the PA's OWN write-ups — briefs, notes, the generated
+# register/dashboard, daily/weekly rollups. These are analysis ABOUT events, not the primary record;
+# on a "what happened / what was said" question they read as more fluent than the source and win on
+# relevance, so the PA ends up citing its own summary back as evidence. Contemporaneity drops them.
+_OWN_NOTE_PATH = ("llm-personal-assistant", "pa_dashboard", "narrative_register", "register.csv",
+                  "register.html", "gaps_report", "00_live_state", "daily_sweep", "/daily/",
+                  "/weekly/", "/monthly/", "brief_cache", "glance_cache", "_analysis", "_summary",
+                  "star_analysis", "situation_dashboard")
+# doc_kind / source values (if cider tags them) that mark derived-not-primary material.
+_OWN_NOTE_KINDS = ("note", "analysis", "summary", "brief", "register", "dashboard")
+# Keys a store_search hit might carry its authored/created date under (cider's field name may vary).
+_AUTHORED_KEYS = ("authored_at", "authored", "created_at", "date", "timestamp")
+
 
 def is_walled(context: str | None) -> bool:
     """True if a context/track tag names walled (case/legal/medical/...) material."""
@@ -68,3 +81,50 @@ def wants_case(theme_or_query: str | None) -> bool:
     return is_walled(theme_or_query) or any(
         w in (theme_or_query or "").lower()
         for w in ("case", "court", "legal", "police", "fdr", "family court", "cora", "medical"))
+
+
+def is_own_note(r: dict) -> bool:
+    """True if a store_search hit is one of the PA's own write-ups (a note about events, not the
+    primary record) — matched by source_path fragment or a derived doc_kind/source tag."""
+    path = (r.get("source_path") or "").lower()
+    if any(frag in path for frag in _OWN_NOTE_PATH):
+        return True
+    kind = (r.get("doc_kind") or r.get("kind") or (r.get("meta") or {}).get("doc_kind")
+            or (r.get("meta") or {}).get("source") or "").lower()
+    return kind in _OWN_NOTE_KINDS
+
+
+def _authored_at(r: dict) -> str | None:
+    for k in _AUTHORED_KEYS:
+        v = r.get(k) or (r.get("meta") or {}).get(k)
+        if v:
+            return str(v)[:10]
+    return None
+
+
+def contemporaneous(results: list[dict], *, before: str | None = None,
+                    drop_own_notes: bool = True) -> tuple[list[dict], dict]:
+    """Recall hygiene for "what actually happened" questions. Enforces in CODE the discipline the
+    focus skill used to only describe: drop the PA's own notes (so a summary can't be cited back as
+    a source), and drop anything authored on/after `before` (it post-dates the event, so it's an
+    account written with hindsight, not contemporaneous evidence).
+
+    Returns `(kept, excluded)` where excluded = {own_notes, post_event} — the caller MUST surface
+    those counts, so a filtered recall never reads as "this is everything the store holds".
+    `before` is an ISO date (event date); pass event_date + 1 day to keep same-day primary records.
+    Set `drop_own_notes=False` when Adam explicitly wants his own analysis.
+    """
+    kept: list[dict] = []
+    own = late = 0
+    cut = (before or "")[:10]
+    for r in results:
+        if drop_own_notes and is_own_note(r):
+            own += 1
+            continue
+        if cut:
+            a = _authored_at(r)
+            if a and a >= cut:
+                late += 1
+                continue
+        kept.append(r)
+    return kept, {"own_notes": own, "post_event": late}
