@@ -183,7 +183,12 @@ def _incoming_messages() -> list[dict]:
                              "sender": it.get("who"), "source": "mail"})
     except (OSError, ValueError):
         pass
-    # Future sources (add when cached): WhatsApp (wacli daily-sync cache), Signal (OpenClaw).
+    try:                                                   # WhatsApp (wacli, read-only + bounded)
+        from lib.whatsapp import recent as wa_recent
+        msgs += wa_recent(days=2)
+    except (ImportError, OSError):
+        pass
+    # Future source: Signal inbound (OpenClaw) — enables reply-to-confirm.
     return msgs
 
 

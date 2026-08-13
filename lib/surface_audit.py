@@ -120,9 +120,11 @@ def audit() -> list[dict]:
                      "live" if cider.get("items") else "absent",
                      f"{len(cider.get('items', []))} atoms"))
 
+    wa_exe = shutil.which("wacli") or (Path.home() / "go/bin/wacli").exists()
+    wa_wired = (REPO / "lib" / "whatsapp.py").exists()
     rows.append(_row("ingest", "WhatsApp (wacli)", "in", True,
-                     "absent" if shutil.which("wacli") or (Path.home() / "go/bin/wacli").exists()
-                     else "missing", "CLI present, NOT wired into ingest"))
+                     "live" if (wa_exe and wa_wired) else ("absent" if wa_exe else "missing"),
+                     "wired into event ingest (read-only)" if wa_wired else "CLI present, not wired"))
     rows.append(_row("ingest", "Signal inbound (OpenClaw)", "in", True,
                      "absent", "outbound only — no inbound read (reply-to-confirm)"))
 
