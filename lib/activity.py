@@ -180,14 +180,17 @@ def from_files(days: int = 14) -> list[Activity]:
     for entry in recent_files(days=days):
         folder = entry.get("folder") or ""
         root = entry.get("root") or ""
-        where = folder if folder and folder != "." else root
+        # Theme from the meaningful sub-folder only — NOT the sync-root name (path inference is a
+        # guess: "OneDrive-UniversityofWestminster" is noise, not a project). Root files stay
+        # themeless so the Nest classifies them by their actual filename content instead.
+        where = folder.lower() if folder and folder != "." else None
         activities.append(
             Activity(
                 source="file",
                 type="file",
                 timestamp=entry.get("modified") or None,
                 title=entry.get("name") or "(unnamed file)",
-                theme=where or None,
+                theme=where,
                 priority=None,
                 url=None,
                 meta={"folder": folder, "root": root},

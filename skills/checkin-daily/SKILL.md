@@ -64,8 +64,11 @@ nothing.
    - If an intention is clearly a task he wants tracked, offer to capture it via
      `task-capture` (`--source checkin`). Don't force it onto the task list.
 
-6. **Refresh the surface** (optional): `python3 build_pa_dashboard.py` so anything captured
-   shows on `PA_DASHBOARD.html`.
+6. **Refresh the surfaces** (optional): `python3 build_pa_dashboard.py` so anything captured
+   shows on `PA_DASHBOARD.html`; and sync tasks to the phone —
+   `python3 -c "import sys; sys.path.insert(0,'.'); from lib.remindpush import sync; print(sync())"`
+   keeps the **PA Tasks** Apple Reminders list (iPhone / Watch / Siri) current with today's open
+   tasks (adds new, completes done). Off-desktop surface; safe to skip if offline.
 
 7. **Close briefly.** Acknowledge the start, name any small win, stop. Never itemise
    undone things as debt.

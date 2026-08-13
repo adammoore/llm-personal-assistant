@@ -52,6 +52,14 @@ cider-store (the sibling knowledge/document/graph engine) via its MCP tools — 
    `graph_path(...)` (same store, discover by keyword) to show claim/contradiction chains with
    provenance.
 
+**Contemporaneity (avoid citing our own notes back to us).** The store also indexes the PA's *own*
+write-ups (briefs, notes, summaries), and they read as MORE fluent than the source — so on a
+"what happened / what was said" question they win on relevance and the answer becomes the summary
+of its own finding. When you're after **what actually happened**, pass `store_search`'s
+`authored_before`/`authored_after` to keep evidence contemporaneous with the event, and prefer the
+primary document over any analysis of it. State which you're showing ("from the 13 Mar email" vs
+"from my note about it").
+
 **Read-only, always.** Reference in place with provenance; never draft legal content, never apply
 legal-team-only analytical labels, never write into CIDER. This is recall for Adam's own eyes.
 

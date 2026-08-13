@@ -24,6 +24,7 @@ DASHBOARD = REPO / "data" / "PA_DASHBOARD.html"
 sys.path.insert(0, str(REPO))
 
 from lib.calevent import set_status as event_set_status
+from lib.remindpush import sync as push_reminders
 from lib.magictodo import breakdown
 from lib.mailsummary import summarize as summarize_inbox
 from lib.people import (
@@ -166,6 +167,10 @@ class Handler(BaseHTTPRequestHandler):
                     ["python3", str(REPO / "skills" / "work-pull" / "pull.py"), "--cache"],
                     check=False, capture_output=True, timeout=120,
                 )
+                _rebuild()
+            elif path == "/push-reminders":
+                # Off-desktop surface: push open tasks to the 'PA Tasks' Reminders list (phone/Siri).
+                push_reminders()
                 _rebuild()
             elif path == "/summarize-mail":
                 summarize_inbox()
