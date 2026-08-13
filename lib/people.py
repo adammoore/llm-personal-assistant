@@ -156,7 +156,7 @@ def upsert(people: list[dict], *, name: str, email: str | None = None,
                 p["last_seen"] = last_seen
             return p
     rec = {"id": _next_id(people), "name": name, "email": email, "context": context,
-           "kind": classify_kind(name, email), "priority": "normal",
+           "kind": classify_kind(name, email), "kind_src": "guess", "priority": "normal",
            "slug": person_slug(name),
            "relationship": None, "birthday": None, "last_seen": last_seen,
            "notes": None, "themes": []}
@@ -270,11 +270,13 @@ def attention_score(p: dict, today: date | None = None, *, pinned: bool = False)
     s += {"high": 25, "normal": 0, "low": -10}.get(prio, 0)
     if prio == "high" and not reason:
         reason = "high priority"
-    # Proximity: closer circles carry a standing baseline of attention.
+    # Proximity: closer circles carry a standing baseline of attention. A guessed circle (from
+    # interaction volume, not Adam) is flagged with a trailing '?' so the brief/People card can't
+    # present an auto-assigned 'inner' as if he'd chosen it. Unmarked circles are treated as guesses.
     circle = p.get("circle")
     s += _CIRCLE_ATTN.get(circle, 0)
     if circle in ("inner", "close") and not reason:
-        reason = circle
+        reason = circle if p.get("circle_src") == "user" else f"{circle}?"
     # Reconnect pull: a growing nag once silence passes ~30 days (capped so it can't dominate).
     seen = p.get("last_seen")
     if seen:
@@ -303,6 +305,10 @@ def ranked_people(pinned_names: set | None = None, today: date | None = None) ->
     for p in load_people():
         sc, reason = attention_score(p, today, pinned=p.get("name") in pinned_names)
         out.append({**p, "kind": p.get("kind") or classify_kind(p.get("name", ""), p.get("email")),
+                    # Unmarked provenance defaults to 'guess', never 'user' — an unmarked value must
+                    # not inherit the credibility of a human decision (cider handover §2).
+                    "kind_src": p.get("kind_src") or "guess",
+                    "circle_src": p.get("circle_src") or "guess",
                     "priority": p.get("priority") or "normal",
                     "circle": p.get("circle") or "peripheral",
                     "_score": sc, "_reason": reason,
@@ -328,6 +334,7 @@ def set_kind(person_id, kind: str, path: Path | None = None) -> bool:
     if not p:
         return False
     p["kind"] = kind
+    p["kind_src"] = "user"                                  # a human decision — protect it from re-derive
     save_people(people, path)
     return True
 
@@ -369,24 +376,39 @@ def set_fields(person_id, fields: dict, path: Path | None = None) -> bool:
         if k == "name" and not v:                          # never blank the name
             continue
         p[k] = (v or None) if k in _FREEFORM else v
+        if k in ("kind", "circle"):                        # a human decision — mark it, protect it
+            p[f"{k}_src"] = "user"
     save_people(people, path)
     return True
 
 
 def classify_all(path: Path | None = None) -> int:
-    """Backfill kind + priority on every stored person (idempotent). Returns count touched."""
+    """Backfill/refresh kind, circle, priority, slug on every stored person (idempotent).
+
+    Guessed values (kind_src/circle_src == 'guess') are RE-DERIVED so a better classifier reaches
+    them — closing the don't-clobber∩fill-gaps blind spot where a populated-but-guessed value was
+    never revisited (cider handover §2). Human-set values (src == 'user') are never touched. A
+    legacy value with NO provenance mark is left as-is (we can't prove it wasn't a human edit), only
+    stamped when absent — so we never clobber a past hand-correction we can't distinguish.
+    """
     people = load_people(path)
     touched = 0
     for p in people:
-        if not p.get("kind"):
-            p["kind"] = classify_kind(p.get("name", ""), p.get("email"))
-            touched += 1
+        # kind: fill if missing, or re-derive if it's an explicit guess (never a 'user' value).
+        if not p.get("kind") or p.get("kind_src") == "guess":
+            new = classify_kind(p.get("name", ""), p.get("email"))
+            if p.get("kind") != new or p.get("kind_src") != "guess":
+                p["kind"], p["kind_src"] = new, "guess"
+                touched += 1
         if not p.get("priority"):
             p["priority"] = "normal"
             touched += 1
-        if not p.get("circle"):
-            p["circle"] = circle_for(p.get("interactions"))
-            touched += 1
+        # circle: same rule — fill if missing, re-derive an explicit guess, leave 'user'/legacy.
+        if not p.get("circle") or p.get("circle_src") == "guess":
+            new = circle_for(p.get("interactions"))
+            if p.get("circle") != new or p.get("circle_src") != "guess":
+                p["circle"], p["circle_src"] = new, "guess"
+                touched += 1
         if not p.get("slug"):
             p["slug"] = person_slug(p.get("name", ""))
             touched += 1

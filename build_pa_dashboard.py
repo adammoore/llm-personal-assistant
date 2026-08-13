@@ -647,11 +647,17 @@ def _person_controls(p: dict) -> tuple[str, str]:
     is_org = p["kind"] == "org"
     badge = "🏢" if is_org else "👤"
     other = "person" if is_org else "org"
+    # Provenance: a guessed kind reads differently from one Adam set. Mark the guess (a faint '·' and
+    # a "guessed" tooltip) so the badge doesn't present a machine guess as a confirmed fact; a
+    # human-set kind ('user') is plain. Unmarked legacy values are treated as guesses.
+    guessed = p.get("kind_src", "guess") != "user"
+    cue = "·" if guessed else ""
+    verb = "guessed" if guessed else "set"
     kind_toggle = (
-        f'<form class="pkind" method="post" action="/person-kind">'
+        f'<form class="pkind{" g" if guessed else ""}" method="post" action="/person-kind">'
         f'<input type="hidden" name="id" value="{p["id"]}">'
         f'<input type="hidden" name="kind" value="{other}">'
-        f'<button title="typed as {p["kind"]} — click to mark as {other}">{badge}</button></form>')
+        f'<button title="{verb} as {p["kind"]} — click to mark as {other}">{badge}{cue}</button></form>')
     prio = p["priority"]
     prio_chip = (
         f'<form class="pprio p-{_esc(prio)}" method="post" action="/person-priority">'

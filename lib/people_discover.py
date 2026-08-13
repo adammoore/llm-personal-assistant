@@ -108,7 +108,11 @@ def discover_email(limit: int = 200) -> dict:
             return
         if _is_self(name, addr) or _NEWSLETTERISH.search(name):
             return
-        key = _norm_name(name)                              # key by NAME so same person merges
+        # Key by IDENTITY (email), name only when there's no address. Keying by name collapsed two
+        # different people who share a display name — "Emma Moore" <sister> and "Emma Moore" <a
+        # professional contact> — into one candidate, keeping only the first email (name≠identity,
+        # cider handover). Distinct addresses now stay distinct; the same address still merges.
+        key = addr or _norm_name(name)
         c = cand.setdefault(key, {"name": name, "email": addr or None, "count": 0, "sent": False})
         c["count"] += 1
         c["sent"] = c["sent"] or sent
@@ -170,13 +174,17 @@ def candidates(*, min_email: int = 3, min_im: int = 12) -> list[dict]:
     merged: dict[str, dict] = {}
 
     def offer(name: str, email: str | None, count: int, source: str, sent: bool = False) -> None:
-        key = _norm_name(name)
-        if not key or key in existing:
+        nm = _norm_name(name)
+        if not nm or nm in existing:
             return
         if email and email.lower() in existing_emails:
             return
+        # Identity key: email/handle when present, name only as fallback — so two people who share a
+        # display name (across email + iMessage) don't fold into one inflated candidate with a frozen
+        # first email. `namekey` is kept so we can still flag namesakes for Adam to reconcile.
+        key = (email or "").lower() or nm
         c = merged.setdefault(key, {"name": name, "email": email, "count": 0,
-                                    "sources": set(), "sent": sent})
+                                    "sources": set(), "sent": sent, "namekey": nm})
         c["count"] += count
         c["sources"].add(source)
         c["sent"] = c["sent"] or sent
@@ -191,10 +199,15 @@ def candidates(*, min_email: int = 3, min_im: int = 12) -> list[dict]:
         for c in discover_imessage(min_count=min_im):
             offer(c["name"], c["email"], c["count"], "imessage")
 
+    # Distinct candidates sharing a display name are namesakes (not a merge). Surface the count so a
+    # same-name pair is visible and reconcilable, never a silent many→one collapse.
+    from collections import Counter
+    namesakes = Counter(c["namekey"] for c in merged.values())
     out = []
     for c in merged.values():
         out.append({"name": c["name"], "email": c["email"], "count": c["count"],
                     "source": "+".join(sorted(c["sources"])),
+                    "namesakes": namesakes[c["namekey"]],
                     "kind": classify_kind(c["name"], c["email"])})
     out.sort(key=lambda x: -x["count"])
     return out
@@ -227,7 +240,8 @@ def main() -> int:
     print(f"{len(cands)} new candidates (ranked by interactions):")
     for c in cands:
         badge = "🏢" if c["kind"] == "org" else "  "
-        print(f"  {c['count']:>5}  {badge} {c['name'][:30]:30} [{c['source']}]")
+        namesake = f"  ⚠ shares name with {c['namesakes'] - 1} other" if c.get("namesakes", 1) > 1 else ""
+        print(f"  {c['count']:>5}  {badge} {c['name'][:30]:30} [{c['source']}]{namesake}")
     if args.add:
         print(f"\nadded {add_people(cands)} people.")
     else:
