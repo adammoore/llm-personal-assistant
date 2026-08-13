@@ -53,3 +53,49 @@ Signal nudge ("⚠ disk 4.2 GB free"). One small function; prevents silent state
 Do **P1 + P4 now** (both Low effort, high safety/utility), then **P2** (WhatsApp) as the next real
 input. **P3** (Signal two-way) is the biggest lift — schedule it deliberately. Re-run
 `lib/surface_audit.py` after each to watch the gap count fall.
+
+---
+
+# Update — 2026-08-13: P1/P2/P4 done, P3 plan + ultracode assessment
+
+Re-ran `lib/surface_audit.py`: **gaps 2 → 1.** Done: **P1** Reminders two-way (complete on
+Watch/Siri → PA task closes; round-trip verified), **P2** WhatsApp wired into event ingest
+(`lib/whatsapp`, read-only wacli), **P4** low-disk guard (Signal warning at **<1 GB**, hysteresis).
+Remaining gap: **Signal inbound (P3)**.
+
+## P3 — Signal reply-to-confirm (plan)
+
+**Goal:** a phone Signal reply *acts* — closing the loop the PA opens when it nudges "reply add".
+
+**Feasible now** — OpenClaw exposes inbound: `openclaw message read` ("Read recent messages") and a
+local store `~/.openclaw/state/openclaw.sqlite`. Sends already go through `schedule/nudge.sh`.
+
+**Build (sequential, ~4 files):**
+1. `lib/signal_in.py` — read new inbound Signal since a watermark (via `openclaw message read --json`,
+   or the sqlite directly like chat.db), `[{text, date, sender}]`, read-only + defensive.
+2. **Command grammar** — parse a reply to an intent: `add` → confirm the most recent *proposed*
+   appointment (`calevent.set_status(key,'confirmed')` → next check-in creates it); `done <n|title>`
+   → `complete_task`; `capture:/todo <text>` → `add_task(source='signal')`. Reuse the iMessage
+   capture-prefix parsing + the appointment queue.
+3. `watch_signal_replies(state)` in the monitor — watermark like `last_imessage_rowid`; act, then
+   confirm back over Signal ("✓ added the dental appt"). Only self/known-sender replies.
+4. Test each intent; guard against acting on arbitrary inbound.
+
+**Effort:** Medium. The unknowns are small (the `message read` flags / sqlite schema — one probe).
+**Risk:** acting on inbound is a WRITE surface — restrict to Adam's own number, confirm each action.
+
+## Assess: is ultracode valuable for P3? — **No.**
+
+Ultracode (multi-agent workflow orchestration) earns its cost on **fan-out** work: comprehensive
+audits with adversarial verification, broad migrations across many sites, wide multi-modal research.
+P3 is the opposite shape — a **single-context, linear feature**: probe OpenClaw's inbound → one
+reader → one parser → one watcher → wire three actions that already exist. There's no independent
+work to parallelise, no set of findings to adversarially verify, nothing that exceeds one context.
+Spawning agents here would burn tokens for no gain (cf. the standing "flag cost before heavy agents"
+rule). Build it solo. *(At most, a single Explore sub-agent for the OpenClaw inbound schema — a
+delegation, not orchestration — and even that is a 2-minute inline probe.)*
+
+**Where ultracode WOULD pay off in this project (for later):** a thorough, adversarially-verified
+**quality audit of the whole PA against the cider handover lessons** — read-the-file-not-filename,
+name≠identity, contemporaneity, merge-not-clobber, silent-no-op, read/write loops — fanned out over
+lessons × modules. That's real fan-out + verification, and a strong ultracode candidate when wanted.
