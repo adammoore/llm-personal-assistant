@@ -262,11 +262,17 @@ def from_granola(days: int = 21) -> list[Activity]:
         data = json.loads(_GRANOLA_CACHE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
+    from lib.wall import is_walled
     items = data.get("items", []) if isinstance(data, dict) else []
     cutoff = ""
     out: list[Activity] = []
     for m in items:
         if not isinstance(m, dict) or not m.get("title"):
+            continue
+        # Case/medical/CP meetings (granola tags meta.context) belong to the gated Nest layer, not
+        # the default timeline — same guard from_cider applies. Fall back to theme if context is unset.
+        meta = m.get("meta") or {}
+        if is_walled(meta.get("context") or m.get("theme")):
             continue
         out.append(Activity(
             source="meeting", type=str(m.get("type") or "granola"),

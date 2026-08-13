@@ -135,33 +135,25 @@ def watch_deadlines(state: dict, now: datetime) -> list[dict]:
     return events
 
 
-_PROPOSED_EVENTS = repo_root() / "data" / "proposed_events.json"
-
-
 def _short_sender(who: str | None) -> str:
     who = (who or "").strip()
     return who.split("@")[0] if "@" in who else (who or "a message")
 
 
 def _write_proposals(fresh: list[dict]) -> None:
-    """Merge fresh event proposals into the dashboard cache (recent, deduped, capped)."""
+    """Merge fresh event proposals into the dashboard cache via calevent's locked+atomic writer.
+
+    Delegating to lib.calevent.append_proposals means the daemon and the dashboard share ONE lock,
+    so a click's set_status can't clobber a detection-cycle append (and vice versa), and the write
+    is temp-file+replace so a full disk can't truncate the queue.
+    """
+    from lib.calevent import append_proposals
+    records = [{"key": candidate_key(c), "when": c["when"], "snippet": c["snippet"],
+               "sender": _short_sender(c.get("sender")), "source": c.get("source"),
+               "proposed_at": datetime.now().isoformat(timespec="seconds")} for c in fresh]
     try:
-        existing = json.loads(_PROPOSED_EVENTS.read_text(encoding="utf-8")).get("items", [])
-    except (OSError, ValueError):
-        existing = []
-    have = {p.get("key") for p in existing}
-    for c in fresh:
-        k = candidate_key(c)
-        if k in have:
-            continue
-        existing.append({"key": k, "when": c["when"], "snippet": c["snippet"],
-                         "sender": _short_sender(c.get("sender")), "source": c.get("source"),
-                         "proposed_at": datetime.now().isoformat(timespec="seconds")})
-    try:
-        _PROPOSED_EVENTS.write_text(
-            json.dumps({"items": existing[-20:]}, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8")
-    except OSError:
+        append_proposals(records)
+    except Exception:                                      # noqa: BLE001 — a write hiccup is non-fatal
         pass
 
 

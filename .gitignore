@@ -45,3 +45,6 @@ yarn-error.log
 
 # === Logs ===
 *.log
+
+# calevent cross-process lock (runtime, not source)
+data/*.lock
