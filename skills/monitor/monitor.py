@@ -49,7 +49,7 @@ from lib.state import (
     repo_root,
     save_state,
 )
-from lib.taskstore import add_task, load_tasks
+from lib.taskstore import add_task, complete_task, load_tasks
 
 # Defaults (mirrored in autonomy.yaml `monitor:` for documentation).
 IMMINENT_MIN = 15          # calendar: warn this many minutes ahead
@@ -210,7 +210,8 @@ def watch_events(state: dict, now: datetime) -> list[dict]:
             "key": f"event:{k}",
             "text": (f"📅 Possible appointment ({_short_sender(c.get('sender'))}): "
                      f"{c['snippet'][:70]} — {c['when']['display']}. "
-                     f"Not on your calendar — reply 'add' to put it in fairresconman.")})
+                     f"Not on your calendar — text 'pa add' (iMessage) or ＋add on the dashboard "
+                     f"to put it in fairresconman.")})
     state["proposed_events"] = list(seen)[-300:]
     if fresh:
         _write_proposals(fresh)
@@ -433,8 +434,35 @@ def _refresh_surfaces(state: dict, now: datetime, *, dry: bool) -> bool:
     return True
 
 
+def _command_action(text: str) -> str | None:
+    """A captured phone message read as a COMMAND — act, return a confirmation; else None.
+
+    The phone reply-to-act channel: the PA can't read Signal (OpenClaw doesn't expose inbound), but
+    it does read self-sent iMessages — so a texted 'pa add' / 'pa done <x>' acts. Same intent as the
+    Signal-reply plan, over a channel that works.
+    """
+    low = text.strip().lower()
+    if low in ("add", "yes", "confirm", "ok", "add it", "book it"):
+        from lib.calevent import pending, set_status
+        props = pending("proposed")
+        if not props:
+            return "· nothing to add — no proposed appointment"
+        p = props[-1]                                      # most recent proposal
+        set_status(p["key"], "confirmed")
+        return (f"✓ appointment queued for fairres: {(p.get('snippet') or '')[:48]} "
+                f"— created at your next check-in")
+    if low.startswith(("done ", "complete ", "did ")):
+        ref = text.split(" ", 1)[1].strip().lower()
+        for t in load_tasks():
+            if not t.get("completed") and ref and ref in (t.get("title") or "").lower():
+                complete_task(int(t["id"]))
+                return f"✓ done: {t.get('title', '')[:50]}"
+        return f"· no open task matching '{ref[:30]}'"
+    return None
+
+
 def capture_imessage(state: dict, *, dry: bool) -> list[str]:
-    """Phone capture: self-sent iMessages prefixed 'todo/pa/capture/task …' become tasks."""
+    """Phone capture/command: self-sent iMessages — 'todo …' → task; 'add' / 'done <x>' → act."""
     last = state.get("last_imessage_rowid", 0)
     caps, top = imessage_captures(last)
     state["last_imessage_rowid"] = top
@@ -446,7 +474,14 @@ def capture_imessage(state: dict, *, dry: bool) -> list[str]:
     done = []
     for c in caps:
         text = c.get("text", "").strip()
-        if not text or text.lower() in existing:
+        if not text:
+            continue
+        if not dry:
+            cmd = _command_action(text)                    # 'add' / 'done <x>' act, not captured
+            if cmd is not None:
+                done.append(cmd)
+                continue
+        if text.lower() in existing:
             continue
         if not dry:
             add_task(text, source="imessage")
