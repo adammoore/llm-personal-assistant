@@ -34,7 +34,9 @@ _CUT = re.compile(r"\s+(?:at\s+\d|on\s+\d|from\s+\d|call\b|tel\b|phone\b|reply\b
 _POSTCODE = re.compile(r"\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b")
 
 
-def _clean_title(snippet: str) -> str:
+def _clean_title(snippet: str) -> tuple[str, bool]:
+    """(title, is_fallback). is_fallback=True means we couldn't extract a title and used the
+    generic 'Appointment' — the confirm card should flag it so Adam knows it's not from the text."""
     s = " ".join((snippet or "").split())
     low = s.lower()
     for p in _PREFIXES:
@@ -46,7 +48,7 @@ def _clean_title(snippet: str) -> str:
         s = s[:cut.start()].strip(" ,.-")
     if "," in s:                                           # keep the "what", drop the address tail
         s = s.split(",")[0].strip()
-    return (s or "Appointment")[:70]
+    return (s[:70], False) if s else ("Appointment", True)
 
 
 def _location(snippet: str) -> str | None:
@@ -70,12 +72,22 @@ def event_fields(prop: dict) -> dict:
             else (s + timedelta(days=1)).date().isoformat()
     except ValueError:
         end = start
-    return {"title": _clean_title(prop.get("snippet", "")),
+    title, title_fallback = _clean_title(prop.get("snippet", ""))
+    location = _location(prop.get("snippet", ""))
+    # Per-field provenance: whether each value was lifted from the message or is a guess. A time
+    # that didn't parse silently becomes an all-day block; a missing title becomes "Appointment";
+    # a location is always a postcode-regex guess. The confirm card flags these before Adam approves.
+    provenance = {
+        "title": "fallback" if title_fallback else "parsed",
+        "all_day": "no-time-parsed" if not has_time else "parsed",
+        "location": "guessed" if location else "none",
+    }
+    return {"title": title,
             "start": start, "end": end, "all_day": not has_time,
-            "location": _location(prop.get("snippet", "")),
+            "location": location,
             "description": (prop.get("snippet") or "") + f"\n\n(captured from {prop.get('source','')}"
                            f" · {prop.get('sender','')})",
-            "account": ACCOUNT}
+            "account": ACCOUNT, "provenance": provenance}
 
 
 class _QueueCorrupt(RuntimeError):

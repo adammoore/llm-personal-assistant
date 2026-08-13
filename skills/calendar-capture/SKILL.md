@@ -28,14 +28,26 @@ Adam's confirmation (`status: confirmed`); this skill does the write.
    python3 -c "import json,sys; sys.path.insert(0,'.'); from lib.calevent import pending, event_fields; \
      print(json.dumps([{**event_fields(p),'key':p['key']} for p in pending('confirmed')], indent=1))"
    ```
-   Each row gives `{key, title, start (ISO), end, all_day, location, description, account}`.
+   Each row gives `{key, title, start (ISO), end, all_day, location, description, account,
+   provenance}`.
+
+   **`provenance` says which fields are guesses, not facts** — treat it as a confirm-before-write
+   signal, never surface it onto the calendar:
+   - `title: "fallback"` → the title is the generic "Appointment" (couldn't extract one); read the
+     `description` and propose a real title, or ask Adam.
+   - `all_day: "no-time-parsed"` → **no clock time was found**, so it defaulted to an ALL-DAY block.
+     Most appointment texts ARE timed — check the `description`; if it names a time, fix `start`/`end`
+     before creating rather than filing an all-day event.
+   - `location: "guessed"` → the location came from a postcode regex, not a stated venue; verify
+     against the `description`.
 
 2. **Create each event** via the Calendar connector. Discover the tool by keyword (the connector
    prefix varies — `mcp__claude_ai_Google_Calendar__create_event` / bare); never hardcode a prefix.
    Map fields: `summary`=title, timed events use `start`/`end` datetimes (Europe/London), all-day
    events use the date; set `location` and `description`; target the **fairresconman** calendar.
    Sanity-check the parsed date/time against the `description` (the raw message) before creating —
-   if the date looks wrong or ambiguous, ask Adam rather than guess.
+   if the date looks wrong or ambiguous, or `provenance` flags a guessed field, ask Adam rather
+   than guess.
 
 3. **Mark it done** so it leaves the queue and won't be re-created:
    ```bash

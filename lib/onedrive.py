@@ -13,12 +13,21 @@ The PA must not copy work-document *contents* into its outputs — this lists fi
 from __future__ import annotations
 
 import os
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 # Files/dirs we never surface (noise, system, in-progress).
 _SKIP_NAMES = {".DS_Store", "desktop.ini", ".lock"}
 _SKIP_SUFFIXES = {".tmp", ".laccdb", "~"}
+
+# Bounds on the walk. Institutional SharePoint libraries hold tens of thousands of files, and this
+# runs on the 15-min surface refresh — an unbounded os.walk stats every one each cycle, hammering
+# the File-Provider on an already disk-pressured machine. Cap the scan (files stat'd) and the depth
+# so cost is bounded regardless of tree size; if the cap clips the scan we say so rather than imply
+# the list is the whole tree. Only stat() is called here — it never downloads placeholder content.
+_MAX_SCAN = 6000                                          # files stat'd before we stop, per call
+_MAX_DEPTH = 7                                            # directory levels below a sync root
 
 
 def sync_roots() -> list[Path]:
@@ -39,13 +48,23 @@ def recent_files(days: int = 7, limit: int = 20,
     roots = roots if roots is not None else sync_roots()
     cutoff = datetime.now() - timedelta(days=days)
     found: list[dict] = []
+    scanned = 0
+    truncated = False
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
             # Prune hidden dirs in place so we don't descend into them.
             dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            # Depth guard: stop descending past _MAX_DEPTH levels below the root.
+            depth = len(Path(dirpath).relative_to(root).parts)
+            if depth >= _MAX_DEPTH:
+                dirnames[:] = []
             for fn in filenames:
                 if fn.startswith(".") or _is_noise(fn):
                     continue
+                if scanned >= _MAX_SCAN:                   # scan cap: stop stat'ing, don't walk on
+                    truncated = True
+                    break
+                scanned += 1
                 fp = Path(dirpath) / fn
                 try:
                     mtime = datetime.fromtimestamp(fp.stat().st_mtime)
@@ -59,6 +78,14 @@ def recent_files(days: int = 7, limit: int = 20,
                     "modified": mtime.isoformat(timespec="minutes"),
                     "root": root.name,
                 })
+            if truncated:
+                break
+        if truncated:
+            break
+    if truncated:
+        # No silent cap: the result is a bounded scan, not the whole tree — say so.
+        print(f"onedrive: scan cap ({_MAX_SCAN} files) hit — recent-files list is partial",
+              file=sys.stderr)
     found.sort(key=lambda f: f["modified"], reverse=True)
     return found[:limit]
 

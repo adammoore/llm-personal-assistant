@@ -32,6 +32,10 @@ from lib.taskstore import load_tasks, repo_root
 
 _CASE_WORK = ("case", "court", "fdr", "hearing", "family", "legal", "enact", "zigzag",
               "notch8", "westminster", "work")
+# Inbox contexts that rank first in the brief. Includes medical + local-authority: on this case
+# those (GP, Sefton) are the most consequential mail, and omitting them made the brief read complete
+# while silently dropping them. lib/inbox._ctx_for emits both these tags.
+_PRIORITY_CTX = ("legal", "local-authority", "medical", "work", "consulting")
 
 
 def _cache() -> Path:
@@ -98,12 +102,15 @@ def gather(today: date, now: datetime) -> dict:
     rem = [r for r in _read_cache("reminders_cache.json").get("items", [])
            if r.get("due") and r["due"][:10] <= tstr]
 
-    # Mail worth attention — the case/work-context items surface first.
+    # Mail worth attention — the case/work-context items surface first. medical + local-authority
+    # (GP, Sefton social work) are the MOST case-adjacent domains; excluding them let the brief read
+    # "nothing needs you" while hiding exactly that. Included here alongside legal — this is Adam's
+    # own private orientation, which already surfaces walled 'legal' mail to him.
     msgs = _read_cache("inbox_cache.json").get("items", [])
-    weighted = sorted(
-        msgs, key=lambda m: (0 if m.get("context") in ("legal", "work", "consulting") else 1,
-                             m.get("date") or ""), reverse=False)
-    top_msgs = [m for m in weighted if m.get("context") in ("legal", "work", "consulting")][:4]
+    priority = [m for m in msgs if m.get("context") in _PRIORITY_CTX]
+    priority.sort(key=lambda m: m.get("date") or "", reverse=True)
+    top_msgs = priority[:4]
+    messages_more = len(priority) - len(top_msgs)          # >0 → the line must not read as complete
 
     # People on the SAME attention scale as tasks — surface whoever most needs him.
     people = ranked_people(set(pins.get("person", [])), today)
@@ -124,7 +131,7 @@ def gather(today: date, now: datetime) -> dict:
         "pinned_tasks": [t for t in ranked if str(t.get("id")) in pinned],
         "top_tasks": ranked[:5],
         "reminders": rem,
-        "messages": top_msgs,
+        "messages": top_msgs, "messages_more": messages_more,
         "people": top_people,
         "recent_meetings": recent_meetings,
         "n_open": len(open_tasks),
@@ -151,9 +158,10 @@ def _situation_text(g: dict) -> str:
     if g["reminders"]:
         lines.append("Reminders due: " + "; ".join(r["title"] for r in g["reminders"][:4]))
     if g["messages"]:
+        more = f" (+{g['messages_more']} more)" if g.get("messages_more") else ""
         lines.append("Mail worth attention: "
                      + "; ".join(f"[{m['context']}] {m['who']}: {m['subject'][:40]}"
-                                 for m in g["messages"]))
+                                 for m in g["messages"]) + more)
     if g.get("people"):
         lines.append("People needing attention: "
                      + "; ".join(f"{p['name']} ({p['_reason']})" for p in g["people"]))

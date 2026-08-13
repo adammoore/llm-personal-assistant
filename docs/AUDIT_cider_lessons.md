@@ -1,5 +1,12 @@
 # PA audit against the cider handover lessons — 13 Aug 2026
 
+## Status (updated 13 Aug 2026)
+
+**Fixed:** 1, 2, 3 (`calevent` locked+atomic queue; `from_granola` wall guard) · 4, 5, 8
+(`brief` medical/LA mail + "+N more"; `onedrive` bounded walk; `calevent` per-field provenance).
+**Open:** 6, 7, 9–17. Next per the fix order below: 6 (focus contemporaneity enforced in code),
+7 (`person_slug` "adam" short-circuit).
+
 ## Executive summary
 
 Seventeen findings survived adversarial verification — **17 CONFIRMED, 0 PLAUSIBLE** — spread across all seven handover dimensions, with none rated high and twelve rated medium. The single most important issue is that the **proposed-events queue can silently and permanently lose a confirmed case appointment**: `lib/calevent.py` writes it non-atomically and mutates it from two unlocked processes, so a killed write or a clobbering interleave leaves a confirmed appointment that never re-surfaces and never lands on the calendar. Overall health is good: nothing corrupts the legal register itself, and every finding is a bounded, well-understood fix. The pattern is not broken logic but **missing provenance and missing "incomplete" signals** — guesses that read as facts, and bounded surfaces that read as complete — concentrated in the people layer, the dashboard cards, and the appointment queue.
