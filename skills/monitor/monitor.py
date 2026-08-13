@@ -58,6 +58,8 @@ MIN_GAP_S = 30             # min seconds between nudges
 HOURLY_CAP = 20            # per-hour nudge cap before coalescing
 COALESCE_ABOVE = 3         # >this many fresh events in one cycle -> one summary nudge
 MAX_RETRACT_PER_CYCLE = 5  # cap stale-nudge retractions per pass (belt-and-braces vs. surges)
+DISK_WARN_GB = 1.0         # warn once when free space drops below this (disk-full corrupts state)
+DISK_CLEAR_GB = 2.0        # re-arm the warning only after it recovers past this (hysteresis)
 
 # nudge.sh prints "✅ Sent via Signal. Message ID: <id>" — this pulls the <id> back out so we
 # can remote-delete that exact message if the email it flagged later disappears.
@@ -208,6 +210,31 @@ def watch_events(state: dict, now: datetime) -> list[dict]:
     if fresh:
         _write_proposals(fresh)
     return events
+
+
+def watch_disk(state: dict) -> list[dict]:
+    """Warn ONCE when free disk drops below DISK_WARN_GB — disk-full silently corrupts state.
+
+    Set at 1 GB, not 5: the disk normally sits near-full (cider-outputs 20 GB), so a higher line
+    would fire constantly. Hysteresis: re-arm only after space recovers past DISK_CLEAR_GB, so a
+    disk hovering at the line doesn't nag every cycle.
+    """
+    import shutil as _sh
+    try:
+        free_gb = _sh.disk_usage(str(Path.home())).free / 1e9
+    except OSError:
+        return []
+    warned = state.get("disk_warned", False)
+    if free_gb < DISK_WARN_GB and not warned:
+        state["disk_warned"] = True
+        return [{"key": f"disk:low:{state.get('disk_episode', 0)}",   # fresh key per episode
+                 "text": (f"⚠ Low disk: {free_gb:.1f} GB free. Things start failing silently at "
+                          f"this point (the iMessage WAL watermark, app saves). Free space soon — "
+                          f"cider-outputs is the big one.")}]
+    if free_gb >= DISK_CLEAR_GB and warned:
+        state["disk_warned"] = False                          # recovered → re-arm
+        state["disk_episode"] = state.get("disk_episode", 0) + 1
+    return []
 
 
 # --- reaction ----------------------------------------------------------------------------
@@ -427,7 +454,7 @@ def cycle(state: dict, now: datetime, *, dry: bool) -> dict:
     """One monitor pass. Returns a small report for logging/tests."""
     present: dict[str, set] = {}   # {account_id: current inbox ids} — feeds retraction
     events = (watch_mail(state, present) + watch_calendar(state, now)
-              + watch_deadlines(state, now) + watch_events(state, now))
+              + watch_deadlines(state, now) + watch_events(state, now) + watch_disk(state))
     # First run: seed silently so we don't nudge about everything that already exists
     # (and set the iMessage baseline so history isn't captured).
     if not state.get("seeded"):
